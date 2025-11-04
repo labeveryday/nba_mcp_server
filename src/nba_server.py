@@ -48,10 +48,19 @@ http_client = httpx.Client(timeout=30.0, headers=NBA_HEADERS)
 # ==================== Helper Functions ====================
 
 def safe_get(data: dict, *keys, default="N/A"):
-    """Safely get nested dictionary values."""
+    """Safely get nested dictionary and list values."""
     for key in keys:
         if isinstance(data, dict):
             data = data.get(key)
+        elif isinstance(data, list):
+            # Handle list indexing
+            try:
+                if isinstance(key, int) and 0 <= key < len(data):
+                    data = data[key]
+                else:
+                    return default
+            except (TypeError, IndexError):
+                return default
         else:
             return default
         if data is None:
@@ -201,6 +210,20 @@ async def list_tools() -> list[Tool]:
                     "season": {
                         "type": "string",
                         "description": "Season in format YYYY-YY (e.g., '2024-25'). Defaults to current season.",
+                    }
+                },
+                "required": ["player_id"],
+            },
+        ),
+        Tool(
+            name="get_player_career_stats",
+            description="Get comprehensive career statistics for a player including total points, games, averages, and more.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "player_id": {
+                        "type": "string",
+                        "description": "NBA player ID",
                     }
                 },
                 "required": ["player_id"],
@@ -648,12 +671,12 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         elif name == "search_players":
             query = arguments["query"].lower()
 
-            # Get all players from stats API
+            # Get all players from stats API (including retired players)
             url = f"{NBA_STATS_API}/commonallplayers"
             params = {
                 "LeagueID": "00",
                 "Season": get_current_season(),
-                "IsOnlyCurrentSeason": "1"
+                "IsOnlyCurrentSeason": "0"  # 0 = all players including retired
             }
 
             data = await fetch_nba_data(url, params)
@@ -759,6 +782,85 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result += f"FG%: {format_stat(safe_get(stats_data, 9), True)}\n"  # FG_PCT
             result += f"3P%: {format_stat(safe_get(stats_data, 12), True)}\n"  # FG3_PCT
             result += f"FT%: {format_stat(safe_get(stats_data, 15), True)}\n"  # FT_PCT
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_player_career_stats":
+            player_id = arguments["player_id"]
+
+            url = f"{NBA_STATS_API}/playercareerstats"
+            params = {
+                "PlayerID": player_id,
+                "PerMode": "Totals"
+            }
+
+            data = await fetch_nba_data(url, params)
+
+            if not data:
+                return [TextContent(type="text", text="Error fetching career stats. Please try again.")]
+
+            # Parse career totals (Regular Season)
+            career_totals = safe_get(data, "resultSets", 0, "rowSet", default=[])
+
+            if not career_totals or career_totals == "N/A" or len(career_totals) == 0:
+                return [TextContent(type="text", text="No career stats found for this player.")]
+
+            # Calculate career totals by summing all seasons
+            total_games = 0
+            total_points = 0
+            total_rebounds = 0
+            total_assists = 0
+            total_steals = 0
+            total_blocks = 0
+            total_minutes = 0
+            total_fgm = 0
+            total_fga = 0
+            total_fg3m = 0
+            total_fg3a = 0
+            total_ftm = 0
+            total_fta = 0
+
+            # Sum up all seasons
+            for season in career_totals:
+                if len(season) > 26:
+                    total_games += float(season[6]) if season[6] else 0  # GP
+                    total_minutes += float(season[8]) if season[8] else 0  # MIN
+                    total_fgm += float(season[9]) if season[9] else 0  # FGM
+                    total_fga += float(season[10]) if season[10] else 0  # FGA
+                    total_fg3m += float(season[12]) if season[12] else 0  # FG3M
+                    total_fg3a += float(season[13]) if season[13] else 0  # FG3A
+                    total_ftm += float(season[15]) if season[15] else 0  # FTM
+                    total_fta += float(season[16]) if season[16] else 0  # FTA
+                    total_rebounds += float(season[20]) if season[20] else 0  # REB
+                    total_assists += float(season[21]) if season[21] else 0  # AST
+                    total_steals += float(season[22]) if season[22] else 0  # STL
+                    total_blocks += float(season[23]) if season[23] else 0  # BLK
+                    total_points += float(season[26]) if season[26] else 0  # PTS
+
+            # Calculate career averages
+            ppg = total_points / total_games if total_games > 0 else 0
+            rpg = total_rebounds / total_games if total_games > 0 else 0
+            apg = total_assists / total_games if total_games > 0 else 0
+            fg_pct = total_fgm / total_fga if total_fga > 0 else 0
+            fg3_pct = total_fg3m / total_fg3a if total_fg3a > 0 else 0
+            ft_pct = total_ftm / total_fta if total_fta > 0 else 0
+
+            result = f"Career Statistics (Regular Season):\n\n"
+            result += f"Total Points: {int(total_points):,}\n"
+            result += f"Games Played: {int(total_games):,}\n"
+            result += f"Total Rebounds: {int(total_rebounds):,}\n"
+            result += f"Total Assists: {int(total_assists):,}\n"
+            result += f"Total Steals: {int(total_steals):,}\n"
+            result += f"Total Blocks: {int(total_blocks):,}\n"
+            result += f"Total Minutes: {int(total_minutes):,}\n\n"
+            result += f"Career Averages:\n"
+            result += f"Points Per Game: {ppg:.1f}\n"
+            result += f"Rebounds Per Game: {rpg:.1f}\n"
+            result += f"Assists Per Game: {apg:.1f}\n\n"
+            result += f"Shooting Percentages:\n"
+            result += f"FG%: {fg_pct*100:.1f}%\n"
+            result += f"3P%: {fg3_pct*100:.1f}%\n"
+            result += f"FT%: {ft_pct*100:.1f}%\n"
 
             return [TextContent(type="text", text=result)]
 
