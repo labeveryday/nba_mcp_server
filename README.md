@@ -46,6 +46,10 @@ A Model Context Protocol (MCP) server that provides access to comprehensive NBA 
 - **get_play_by_play**: Get complete play-by-play data for a game with timestamps, scores, and descriptions for every action
 - **get_game_rotation**: Get player substitution patterns showing when players entered/exited and their performance during each stint
 
+### Advanced Stats Tools
+- **get_player_advanced_stats**: Get advanced player metrics including TS%, ORtg/DRtg, USG%, AST%, REB%, PIE, and efficiency ratings
+- **get_team_advanced_stats**: Get advanced team metrics including ORtg/DRtg, pace, net rating, TS%, and four factors
+
 ## Why Direct API Calls?
 
 This server uses **direct HTTP calls** to NBA APIs instead of third-party wrappers like `nba_api`. This approach provides:

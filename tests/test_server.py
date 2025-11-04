@@ -178,11 +178,11 @@ class TestToolsListRegistration:
 
     @pytest.mark.asyncio
     async def test_list_tools_count(self):
-        """Test that all 24 tools are registered."""
+        """Test that all 26 tools are registered."""
         from nba_mcp_server.server import list_tools
 
         tools = await list_tools()
-        assert len(tools) == 24
+        assert len(tools) == 26
 
     @pytest.mark.asyncio
     async def test_list_tools_names(self):
@@ -217,6 +217,8 @@ class TestToolsListRegistration:
             "get_shooting_splits",
             "get_play_by_play",
             "get_game_rotation",
+            "get_player_advanced_stats",
+            "get_team_advanced_stats",
         ]
 
         for expected in expected_tools:
@@ -412,3 +414,97 @@ class TestPlayByPlayAndRotationTools:
 
             assert len(result) == 1
             assert "No rotation data found" in result[0].text
+
+
+class TestAdvancedStatsTools:
+    """Test advanced stats tools."""
+
+    @pytest.mark.asyncio
+    async def test_get_player_advanced_stats(self, mock_httpx_response, sample_player_advanced_stats_data):
+        """Test get_player_advanced_stats tool."""
+        from nba_mcp_server.server import call_tool
+
+        mock_response = mock_httpx_response(200, sample_player_advanced_stats_data)
+
+        with patch('nba_mcp_server.server.http_client') as mock_client:
+            mock_client.get.return_value = mock_response
+            result = await call_tool("get_player_advanced_stats", {
+                "player_id": "2544",
+                "season": "2024-25"
+            })
+
+            assert len(result) == 1
+            assert isinstance(result[0], TextContent)
+            assert "Advanced Stats" in result[0].text
+            assert "LeBron James" in result[0].text
+            assert "Efficiency Metrics" in result[0].text
+            assert "True Shooting %" in result[0].text
+            assert "Offensive Rating" in result[0].text
+            assert "Defensive Rating" in result[0].text
+            assert "Net Rating" in result[0].text
+            assert "Usage %" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_get_player_advanced_stats_no_data(self, mock_httpx_response):
+        """Test get_player_advanced_stats with no data."""
+        from nba_mcp_server.server import call_tool
+
+        empty_data = {
+            "resultSets": []
+        }
+        mock_response = mock_httpx_response(200, empty_data)
+
+        with patch('nba_mcp_server.server.http_client') as mock_client:
+            mock_client.get.return_value = mock_response
+            result = await call_tool("get_player_advanced_stats", {
+                "player_id": "2544",
+                "season": "2024-25"
+            })
+
+            assert len(result) == 1
+            assert "No advanced stats found" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_get_team_advanced_stats(self, mock_httpx_response, sample_team_advanced_stats_data):
+        """Test get_team_advanced_stats tool."""
+        from nba_mcp_server.server import call_tool
+
+        mock_response = mock_httpx_response(200, sample_team_advanced_stats_data)
+
+        with patch('nba_mcp_server.server.http_client') as mock_client:
+            mock_client.get.return_value = mock_response
+            result = await call_tool("get_team_advanced_stats", {
+                "team_id": "1610612747",
+                "season": "2024-25"
+            })
+
+            assert len(result) == 1
+            assert isinstance(result[0], TextContent)
+            assert "Advanced Stats" in result[0].text
+            assert "Lakers" in result[0].text
+            assert "Team Ratings" in result[0].text
+            assert "Offensive Rating" in result[0].text
+            assert "Defensive Rating" in result[0].text
+            assert "Net Rating" in result[0].text
+            assert "Pace" in result[0].text
+            assert "True Shooting %" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_get_team_advanced_stats_no_data(self, mock_httpx_response):
+        """Test get_team_advanced_stats with no data."""
+        from nba_mcp_server.server import call_tool
+
+        empty_data = {
+            "resultSets": []
+        }
+        mock_response = mock_httpx_response(200, empty_data)
+
+        with patch('nba_mcp_server.server.http_client') as mock_client:
+            mock_client.get.return_value = mock_response
+            result = await call_tool("get_team_advanced_stats", {
+                "team_id": "1610612747",
+                "season": "2024-25"
+            })
+
+            assert len(result) == 1
+            assert "No advanced stats found" in result[0].text

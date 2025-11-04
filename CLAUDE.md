@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an **NBA MCP (Model Context Protocol) Server** that provides access to comprehensive NBA statistics and data through direct HTTP API calls to official NBA endpoints. The server exposes 24 tools for fetching player stats, game data, team information, league-wide statistics, player awards, shooting analytics, and play-by-play data.
+This is an **NBA MCP (Model Context Protocol) Server** that provides access to comprehensive NBA statistics and data through direct HTTP API calls to official NBA endpoints. The server exposes 26 tools for fetching player stats, game data, team information, league-wide statistics, player awards, shooting analytics, play-by-play data, and advanced efficiency metrics.
 
 **Key Design Decision**: This project uses **direct HTTP calls** to NBA APIs instead of third-party wrappers like `nba_api` for better reliability, control, easier debugging, and to stay always up-to-date with NBA's API structure.
 
-**Architecture**: Single-module implementation (`src/nba_mcp_server/server.py`) containing all server logic, tool handlers, and utilities (~2372 lines).
+**Architecture**: Single-module implementation (`src/nba_mcp_server/server.py`) containing all server logic, tool handlers, and utilities (~2721 lines).
 
 ## Development Commands
 
@@ -121,7 +121,7 @@ mcp_client = MCPClient(lambda: stdio_client(
 
 ### Tool Categories
 
-The server exposes 24 MCP tools organized into 6 categories:
+The server exposes 26 MCP tools organized into 7 categories:
 
 **Live Game Tools**:
 - `get_todays_scoreboard` - Today's games with live scores
@@ -158,6 +158,10 @@ The server exposes 24 MCP tools organized into 6 categories:
 **Play-by-Play & Rotation Tools** (New in Phase 2):
 - `get_play_by_play` - Complete play-by-play data with timestamps, scores, and descriptions for every game action
 - `get_game_rotation` - Player substitution patterns showing when players entered/exited and their performance during each stint
+
+**Advanced Stats Tools** (New in Phase 3):
+- `get_player_advanced_stats` - Advanced player metrics including TS%, ORtg/DRtg, USG%, AST%, REB%, PIE, and more
+- `get_team_advanced_stats` - Advanced team metrics including ORtg/DRtg, pace, net rating, TS%, and four factors
 
 ### Helper Functions
 
@@ -244,7 +248,7 @@ The server uses synchronous httpx client (`http_client` on line 45) within async
 ### Single-Module Design
 - The entire server is implemented in one module (`src/nba_mcp_server/server.py`) for simplicity
 - No need to navigate multiple modules - all logic is in one place
-- ~2372 lines total including all tools, helpers, and server setup
+- ~2721 lines total including all tools, helpers, and server setup
 - Package structure follows Python best practices for PyPI distribution
 
 ### Hardcoded Team Data

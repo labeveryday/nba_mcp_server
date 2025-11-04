@@ -229,3 +229,35 @@ def sample_game_rotation_data():
             }
         ]
     }
+
+
+@pytest.fixture
+def sample_player_advanced_stats_data():
+    """Sample player advanced stats data from NBA API."""
+    return {
+        "resultSets": [
+            {
+                "name": "OverallPlayerDashboard",
+                "headers": ["GROUP_SET", "GROUP_VALUE", "PLAYER_ID", "PLAYER_NAME", "GP", "W", "L", "W_PCT", "MIN", "OFF_RATING", "DEF_RATING", "NET_RATING", "AST_PCT", "AST_TO", "AST_RATIO", "OREB_PCT", "DREB_PCT", "REB_PCT", "TM_TOV_PCT", "EFG_PCT", "TS_PCT", "USG_PCT", "PACE", "PIE"],
+                "rowSet": [
+                    ["Overall", "2024-25", 2544, "LeBron James", 10, 7, 3, 0.7, 35.5, 115.2, 108.5, 6.7, 35.8, 2.15, 18.5, 3.2, 22.5, 12.8, 14.2, 0.580, 0.625, 28.5, 100.5, 0.185]
+                ]
+            }
+        ]
+    }
+
+
+@pytest.fixture
+def sample_team_advanced_stats_data():
+    """Sample team advanced stats data from NBA API."""
+    return {
+        "resultSets": [
+            {
+                "name": "OverallTeamDashboard",
+                "headers": ["GROUP_SET", "GROUP_VALUE", "TEAM_ID", "TEAM_NAME", "GP", "W", "L", "W_PCT", "MIN", "OFF_RATING", "DEF_RATING", "NET_RATING", "AST_PCT", "AST_TO", "AST_RATIO", "OREB_PCT", "DREB_PCT", "REB_PCT", "TM_TOV_PCT", "EFG_PCT", "TS_PCT", "PACE", "PIE"],
+                "rowSet": [
+                    ["Overall", "2024-25", 1610612747, "Lakers", 10, 7, 3, 0.7, 240.0, 112.5, 110.2, 2.3, 62.5, 1.85, 16.2, 8.5, 75.8, 51.2, 12.8, 0.545, 0.575, 98.5, 0.525]
+                ]
+            }
+        ]
+    }

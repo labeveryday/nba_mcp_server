@@ -507,6 +507,44 @@ async def list_tools() -> list[Tool]:
                 "required": ["game_id"],
             },
         ),
+
+        # Advanced Stats Tools
+        Tool(
+            name="get_player_advanced_stats",
+            description="Get advanced statistics for a player including TS%, ORtg/DRtg, USG%, AST%, REB%, PIE, and more. Shows efficiency and impact metrics.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "player_id": {
+                        "type": "string",
+                        "description": "NBA player ID (use search_players to find)",
+                    },
+                    "season": {
+                        "type": "string",
+                        "description": "Season in format YYYY-YY (e.g., '2024-25'). Defaults to current season.",
+                    }
+                },
+                "required": ["player_id"],
+            },
+        ),
+        Tool(
+            name="get_team_advanced_stats",
+            description="Get advanced team statistics including ORtg/DRtg, pace, net rating, TS%, and four factors. Shows team efficiency and playing style.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "team_id": {
+                        "type": "string",
+                        "description": "NBA team ID (use get_all_teams to find)",
+                    },
+                    "season": {
+                        "type": "string",
+                        "description": "Season in format YYYY-YY (e.g., '2024-25'). Defaults to current season.",
+                    }
+                },
+                "required": ["team_id"],
+            },
+        ),
     ]
 
 
@@ -2345,6 +2383,317 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                         result += f"      Points: {pts}, +/-: {diff:+}, Usage: {format_stat(usg, is_percentage=True)}\n"
 
                 result += "\n"
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_player_advanced_stats":
+            player_id = arguments.get("player_id")
+            season = arguments.get("season", get_current_season())
+
+            # Build parameters for playerdashboardbygeneralsplits endpoint with Advanced MeasureType
+            params = {
+                "PlayerID": player_id,
+                "Season": season,
+                "SeasonType": "Regular Season",
+                "MeasureType": "Advanced",
+                "PerMode": "PerGame",
+                "PlusMinus": "N",
+                "PaceAdjust": "N",
+                "Rank": "N",
+                "LastNGames": "0",
+                "Month": "0",
+                "OpponentTeamID": "0",
+                "Period": "0",
+                "DateFrom": "",
+                "DateTo": "",
+                "GameSegment": "",
+                "LeagueID": "00",
+                "Location": "",
+                "Outcome": "",
+                "PORound": "0",
+                "SeasonSegment": "",
+                "ShotClockRange": "",
+                "VsConference": "",
+                "VsDivision": "",
+            }
+
+            url = f"{NBA_STATS_API}/playerdashboardbygeneralsplits"
+            data = await fetch_nba_data(url, params=params)
+
+            if not data:
+                return [TextContent(type="text", text="Failed to fetch player advanced stats. The NBA API may be unavailable.")]
+
+            # Extract advanced stats from OverallPlayerDashboard result set
+            result_sets = safe_get(data, "resultSets", default=[])
+
+            overall_data = None
+            for rs in result_sets:
+                if safe_get(rs, "name") == "OverallPlayerDashboard":
+                    overall_data = rs
+                    break
+
+            if not overall_data:
+                return [TextContent(type="text", text=f"No advanced stats found for this player in {season} season.")]
+
+            headers = safe_get(overall_data, "headers", default=[])
+            rows = safe_get(overall_data, "rowSet", default=[])
+
+            if not rows:
+                return [TextContent(type="text", text=f"No advanced stats available for {season} season.")]
+
+            # Get player name and basic info
+            row = rows[0]
+            # Find PLAYER_NAME index in headers
+            player_name_idx = headers.index("PLAYER_NAME") if "PLAYER_NAME" in headers else 1
+            player_name = safe_get(row, player_name_idx, default="Player")
+
+            result = f"Advanced Stats - {player_name} ({season})\n\n"
+
+            # Extract key advanced metrics
+            try:
+                # Find indices for advanced metrics
+                gp_idx = headers.index("GP") if "GP" in headers else -1
+                min_idx = headers.index("MIN") if "MIN" in headers else -1
+                off_rating_idx = headers.index("OFF_RATING") if "OFF_RATING" in headers else -1
+                def_rating_idx = headers.index("DEF_RATING") if "DEF_RATING" in headers else -1
+                net_rating_idx = headers.index("NET_RATING") if "NET_RATING" in headers else -1
+                ts_pct_idx = headers.index("TS_PCT") if "TS_PCT" in headers else -1
+                efg_pct_idx = headers.index("EFG_PCT") if "EFG_PCT" in headers else -1
+                usg_pct_idx = headers.index("USG_PCT") if "USG_PCT" in headers else -1
+                pace_idx = headers.index("PACE") if "PACE" in headers else -1
+                pie_idx = headers.index("PIE") if "PIE" in headers else -1
+                ast_pct_idx = headers.index("AST_PCT") if "AST_PCT" in headers else -1
+                ast_ratio_idx = headers.index("AST_RATIO") if "AST_RATIO" in headers else -1
+                oreb_pct_idx = headers.index("OREB_PCT") if "OREB_PCT" in headers else -1
+                dreb_pct_idx = headers.index("DREB_PCT") if "DREB_PCT" in headers else -1
+                reb_pct_idx = headers.index("REB_PCT") if "REB_PCT" in headers else -1
+
+                # Basic info
+                gp = safe_get(row, gp_idx, default=0) if gp_idx >= 0 else 0
+                minutes = safe_get(row, min_idx, default=0) if min_idx >= 0 else 0
+
+                result += f"Games Played: {gp}\n"
+                result += f"Minutes Per Game: {format_stat(minutes)}\n\n"
+
+                # Efficiency Metrics
+                result += "Efficiency Metrics:\n"
+                if ts_pct_idx >= 0:
+                    ts_pct = safe_get(row, ts_pct_idx, default=0)
+                    result += f"  True Shooting %: {format_stat(ts_pct, is_percentage=True)}\n"
+                if efg_pct_idx >= 0:
+                    efg_pct = safe_get(row, efg_pct_idx, default=0)
+                    result += f"  Effective FG %: {format_stat(efg_pct, is_percentage=True)}\n"
+                if pie_idx >= 0:
+                    pie = safe_get(row, pie_idx, default=0)
+                    result += f"  Player Impact Estimate (PIE): {format_stat(pie, is_percentage=True)}\n"
+                result += "\n"
+
+                # Offensive Impact
+                result += "Offensive Impact:\n"
+                if off_rating_idx >= 0:
+                    off_rating = safe_get(row, off_rating_idx, default=0)
+                    result += f"  Offensive Rating: {format_stat(off_rating)}\n"
+                if usg_pct_idx >= 0:
+                    usg_pct = safe_get(row, usg_pct_idx, default=0)
+                    result += f"  Usage %: {format_stat(usg_pct, is_percentage=True)}\n"
+                if ast_pct_idx >= 0:
+                    ast_pct = safe_get(row, ast_pct_idx, default=0)
+                    result += f"  Assist %: {format_stat(ast_pct, is_percentage=True)}\n"
+                if ast_ratio_idx >= 0:
+                    ast_ratio = safe_get(row, ast_ratio_idx, default=0)
+                    result += f"  Assist Ratio: {format_stat(ast_ratio)}\n"
+                result += "\n"
+
+                # Defensive Impact
+                result += "Defensive Impact:\n"
+                if def_rating_idx >= 0:
+                    def_rating = safe_get(row, def_rating_idx, default=0)
+                    result += f"  Defensive Rating: {format_stat(def_rating)}\n"
+                if dreb_pct_idx >= 0:
+                    dreb_pct = safe_get(row, dreb_pct_idx, default=0)
+                    result += f"  Defensive Rebound %: {format_stat(dreb_pct, is_percentage=True)}\n"
+                result += "\n"
+
+                # Rebounding
+                result += "Rebounding:\n"
+                if reb_pct_idx >= 0:
+                    reb_pct = safe_get(row, reb_pct_idx, default=0)
+                    result += f"  Total Rebound %: {format_stat(reb_pct, is_percentage=True)}\n"
+                if oreb_pct_idx >= 0:
+                    oreb_pct = safe_get(row, oreb_pct_idx, default=0)
+                    result += f"  Offensive Rebound %: {format_stat(oreb_pct, is_percentage=True)}\n"
+                if dreb_pct_idx >= 0:
+                    dreb_pct = safe_get(row, dreb_pct_idx, default=0)
+                    result += f"  Defensive Rebound %: {format_stat(dreb_pct, is_percentage=True)}\n"
+                result += "\n"
+
+                # Net Impact
+                result += "Net Impact:\n"
+                if net_rating_idx >= 0:
+                    net_rating = safe_get(row, net_rating_idx, default=0)
+                    result += f"  Net Rating: {format_stat(net_rating)}\n"
+                if pace_idx >= 0:
+                    pace = safe_get(row, pace_idx, default=0)
+                    result += f"  Pace: {format_stat(pace)}\n"
+
+            except (ValueError, IndexError) as e:
+                logger.error(f"Error parsing advanced stats: {e}")
+                result += "Unable to parse some advanced statistics\n"
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_team_advanced_stats":
+            team_id = arguments.get("team_id")
+            season = arguments.get("season", get_current_season())
+
+            # Build parameters for teamdashboardbygeneralsplits endpoint with Advanced MeasureType
+            params = {
+                "TeamID": team_id,
+                "Season": season,
+                "SeasonType": "Regular Season",
+                "MeasureType": "Advanced",
+                "PerMode": "PerGame",
+                "PlusMinus": "N",
+                "PaceAdjust": "N",
+                "Rank": "N",
+                "LastNGames": "0",
+                "Month": "0",
+                "OpponentTeamID": "0",
+                "Period": "0",
+                "DateFrom": "",
+                "DateTo": "",
+                "GameSegment": "",
+                "LeagueID": "00",
+                "Location": "",
+                "Outcome": "",
+                "PORound": "0",
+                "SeasonSegment": "",
+                "ShotClockRange": "",
+                "VsConference": "",
+                "VsDivision": "",
+            }
+
+            url = f"{NBA_STATS_API}/teamdashboardbygeneralsplits"
+            data = await fetch_nba_data(url, params=params)
+
+            if not data:
+                return [TextContent(type="text", text="Failed to fetch team advanced stats. The NBA API may be unavailable.")]
+
+            # Extract advanced stats from OverallTeamDashboard result set
+            result_sets = safe_get(data, "resultSets", default=[])
+
+            overall_data = None
+            for rs in result_sets:
+                if safe_get(rs, "name") == "OverallTeamDashboard":
+                    overall_data = rs
+                    break
+
+            if not overall_data:
+                return [TextContent(type="text", text=f"No advanced stats found for this team in {season} season.")]
+
+            headers = safe_get(overall_data, "headers", default=[])
+            rows = safe_get(overall_data, "rowSet", default=[])
+
+            if not rows:
+                return [TextContent(type="text", text=f"No advanced stats available for {season} season.")]
+
+            # Get team name and basic info
+            row = rows[0]
+
+            # Find TEAM_NAME index in headers
+            team_name_idx = headers.index("TEAM_NAME") if "TEAM_NAME" in headers else -1
+            if team_name_idx >= 0:
+                team_name = safe_get(row, team_name_idx, default="Team")
+            else:
+                # Fallback to GROUP_VALUE if TEAM_NAME not found
+                team_name_idx = headers.index("GROUP_VALUE") if "GROUP_VALUE" in headers else 1
+                team_name = safe_get(row, team_name_idx, default="Team")
+
+            result = f"Advanced Stats - {team_name} ({season})\n\n"
+
+            # Extract key advanced metrics
+            try:
+                # Find indices for advanced metrics
+                gp_idx = headers.index("GP") if "GP" in headers else -1
+                w_idx = headers.index("W") if "W" in headers else -1
+                l_idx = headers.index("L") if "L" in headers else -1
+                off_rating_idx = headers.index("OFF_RATING") if "OFF_RATING" in headers else -1
+                def_rating_idx = headers.index("DEF_RATING") if "DEF_RATING" in headers else -1
+                net_rating_idx = headers.index("NET_RATING") if "NET_RATING" in headers else -1
+                ts_pct_idx = headers.index("TS_PCT") if "TS_PCT" in headers else -1
+                efg_pct_idx = headers.index("EFG_PCT") if "EFG_PCT" in headers else -1
+                pace_idx = headers.index("PACE") if "PACE" in headers else -1
+                pie_idx = headers.index("PIE") if "PIE" in headers else -1
+                ast_pct_idx = headers.index("AST_PCT") if "AST_PCT" in headers else -1
+                ast_ratio_idx = headers.index("AST_RATIO") if "AST_RATIO" in headers else -1
+                oreb_pct_idx = headers.index("OREB_PCT") if "OREB_PCT" in headers else -1
+                dreb_pct_idx = headers.index("DREB_PCT") if "DREB_PCT" in headers else -1
+                reb_pct_idx = headers.index("REB_PCT") if "REB_PCT" in headers else -1
+
+                # Basic info
+                gp = safe_get(row, gp_idx, default=0) if gp_idx >= 0 else 0
+                wins = safe_get(row, w_idx, default=0) if w_idx >= 0 else 0
+                losses = safe_get(row, l_idx, default=0) if l_idx >= 0 else 0
+
+                result += f"Record: {wins}-{losses} ({gp} games)\n\n"
+
+                # Team Ratings
+                result += "Team Ratings:\n"
+                if off_rating_idx >= 0:
+                    off_rating = safe_get(row, off_rating_idx, default=0)
+                    result += f"  Offensive Rating: {format_stat(off_rating)} (points per 100 possessions)\n"
+                if def_rating_idx >= 0:
+                    def_rating = safe_get(row, def_rating_idx, default=0)
+                    result += f"  Defensive Rating: {format_stat(def_rating)} (points allowed per 100 possessions)\n"
+                if net_rating_idx >= 0:
+                    net_rating = safe_get(row, net_rating_idx, default=0)
+                    result += f"  Net Rating: {format_stat(net_rating)} (point differential per 100 possessions)\n"
+                if pace_idx >= 0:
+                    pace = safe_get(row, pace_idx, default=0)
+                    result += f"  Pace: {format_stat(pace)} (possessions per 48 minutes)\n"
+                result += "\n"
+
+                # Shooting Efficiency
+                result += "Shooting Efficiency:\n"
+                if ts_pct_idx >= 0:
+                    ts_pct = safe_get(row, ts_pct_idx, default=0)
+                    result += f"  True Shooting %: {format_stat(ts_pct, is_percentage=True)}\n"
+                if efg_pct_idx >= 0:
+                    efg_pct = safe_get(row, efg_pct_idx, default=0)
+                    result += f"  Effective FG %: {format_stat(efg_pct, is_percentage=True)}\n"
+                result += "\n"
+
+                # Ball Movement
+                result += "Ball Movement:\n"
+                if ast_pct_idx >= 0:
+                    ast_pct = safe_get(row, ast_pct_idx, default=0)
+                    result += f"  Assist %: {format_stat(ast_pct, is_percentage=True)}\n"
+                if ast_ratio_idx >= 0:
+                    ast_ratio = safe_get(row, ast_ratio_idx, default=0)
+                    result += f"  Assist Ratio: {format_stat(ast_ratio)}\n"
+                result += "\n"
+
+                # Rebounding
+                result += "Rebounding:\n"
+                if reb_pct_idx >= 0:
+                    reb_pct = safe_get(row, reb_pct_idx, default=0)
+                    result += f"  Total Rebound %: {format_stat(reb_pct, is_percentage=True)}\n"
+                if oreb_pct_idx >= 0:
+                    oreb_pct = safe_get(row, oreb_pct_idx, default=0)
+                    result += f"  Offensive Rebound %: {format_stat(oreb_pct, is_percentage=True)}\n"
+                if dreb_pct_idx >= 0:
+                    dreb_pct = safe_get(row, dreb_pct_idx, default=0)
+                    result += f"  Defensive Rebound %: {format_stat(dreb_pct, is_percentage=True)}\n"
+                result += "\n"
+
+                # Overall Impact
+                if pie_idx >= 0:
+                    pie = safe_get(row, pie_idx, default=0)
+                    result += f"Team Impact Estimate (PIE): {format_stat(pie, is_percentage=True)}\n"
+
+            except (ValueError, IndexError) as e:
+                logger.error(f"Error parsing team advanced stats: {e}")
+                result += "Unable to parse some advanced statistics\n"
 
             return [TextContent(type="text", text=result)]
 

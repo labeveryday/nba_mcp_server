@@ -1,7 +1,7 @@
 # NBA MCP Server - Endpoint Expansion Progress
 
 **Last Updated:** 2025-11-04
-**Status:** Phase 2 Complete ✅
+**Status:** Phase 3 Complete ✅
 
 ## Overview
 
@@ -84,29 +84,60 @@ This document tracks progress on the NBA MCP Server endpoint expansion project, 
 - ✅ Tool count updated from 22 to 24
 - ✅ Category count updated from 5 to 6
 
+#### Phase 3: Advanced Stats (2 endpoints)
+**Status:** Complete
+**Date Completed:** 2025-11-04
+
+**Endpoints Added:**
+1. **`get_player_advanced_stats`** - Advanced player efficiency metrics
+   - Endpoint: `https://stats.nba.com/stats/playerdashboardbygeneralsplits`
+   - Returns: TS%, ORtg/DRtg, USG%, AST%, REB%, PIE, pace, net rating
+   - Features:
+     - Efficiency metrics (TS%, EFG%, PIE)
+     - Offensive impact (ORtg, usage %, assist %, assist ratio)
+     - Defensive impact (DRtg, defensive rebound %)
+     - Rebounding percentages (total, offensive, defensive)
+     - Net impact (net rating, pace)
+     - Uses MeasureType="Advanced" for advanced metrics
+
+2. **`get_team_advanced_stats`** - Advanced team efficiency metrics
+   - Endpoint: `https://stats.nba.com/stats/teamdashboardbygeneralsplits`
+   - Returns: Team ORtg/DRtg, pace, net rating, TS%, four factors
+   - Features:
+     - Team ratings (offensive, defensive, net rating, pace)
+     - Shooting efficiency (TS%, EFG%)
+     - Ball movement (assist %, assist ratio)
+     - Rebounding percentages (total, offensive, defensive)
+     - Team impact estimate (PIE)
+     - Uses MeasureType="Advanced" for advanced metrics
+
+**Testing:**
+- ✅ 4 new unit tests added (2 per tool)
+- ✅ Test fixtures created for player and team advanced stats
+- ✅ All 41 tests passing (37 previous + 4 new)
+- ✅ Code coverage increased from 38% to 45%
+
+**Documentation:**
+- ✅ CLAUDE.md updated with new tool category
+- ✅ README.md updated with tool descriptions
+- ✅ Tool count updated from 24 to 26
+- ✅ Category count updated from 6 to 7
+
 ## Statistics
 
 ### Current Metrics
-- **Total Tools:** 24 (was 22)
-- **Total Categories:** 6 (was 5)
-- **Code Lines:** 2,372 (was 2,149)
-- **Test Count:** 37 (was 33)
-- **Code Coverage:** 38% (was 32%)
+- **Total Tools:** 26 (was 24)
+- **Total Categories:** 7 (was 6)
+- **Code Lines:** 2,721 (was 2,372)
+- **Test Count:** 41 (was 37)
+- **Code Coverage:** 45% (was 38%)
 
 ### Progress Tracking
-- **Phases Complete:** 2 / 10 (20%)
-- **Endpoints Added:** 4 / 19 (21%)
-- **Estimated Time Spent:** ~4 hours (2 per phase)
+- **Phases Complete:** 3 / 10 (30%)
+- **Endpoints Added:** 6 / 19 (31.6%)
+- **Estimated Time Spent:** ~6 hours (2 per phase)
 
 ## Pending Work
-
-### Phase 3: Advanced Stats (2 endpoints)
-**Status:** Not Started
-**Priority:** High Value, Low Complexity
-
-**Planned Endpoints:**
-1. `get_player_advanced_stats` - TS%, PER, Usage Rate, ORtg/DRtg
-2. `get_team_advanced_stats` - Team-level advanced metrics
 
 ### Phase 4: Player Tracking (3 endpoints)
 **Status:** Not Started
@@ -200,8 +231,8 @@ This document tracks progress on the NBA MCP Server endpoint expansion project, 
 
 ### Estimated Remaining Work
 - **Total Time:** 14-19 hours (original estimate)
-- **Time Spent:** ~4 hours
-- **Time Remaining:** 10-15 hours
+- **Time Spent:** ~6 hours
+- **Time Remaining:** 8-13 hours
 
 ## Notes
 
@@ -218,6 +249,15 @@ This document tracks progress on the NBA MCP Server endpoint expansion project, 
 - All 37 tests passed on first run after implementation
 - Code coverage improved from 32% to 38%
 
+### What Went Well - Phase 3
+- Quick endpoint research using WebSearch and WebFetch
+- MeasureType="Advanced" parameter provided all needed advanced metrics
+- Clean implementation using existing patterns from previous phases
+- Index-based header lookup worked reliably after initial fix
+- All 41 tests passed after fixing player/team name extraction
+- Code coverage improved from 38% to 45%
+- Advanced stats provide valuable efficiency metrics (TS%, ORtg/DRtg, USG%, PIE)
+
 ### Challenges Encountered - Phase 1
 - Player name extraction from shot chart data required adjustment
 - Test fixtures needed careful structure matching
@@ -228,6 +268,12 @@ This document tracks progress on the NBA MCP Server endpoint expansion project, 
 - Rotation data has complex structure with multiple stints per player - required grouping logic
 - Needed to handle both home and away team data separately
 
+### Challenges Encountered - Phase 3
+- Initial player/team name extraction used wrong indices - fixed by using header.index() lookup
+- Test failures revealed need for dynamic index finding instead of hardcoded positions
+- NBA API doesn't provide PER (Player Efficiency Rating) - it's a proprietary stat
+- Had to distinguish between using index 1 as fallback vs finding correct header index
+
 ### Lessons Learned
 - NBA Stats API consistently uses `resultSets` array structure with "name" field to identify data sets
 - Mock data structure must precisely match real API responses
@@ -235,6 +281,9 @@ This document tracks progress on the NBA MCP Server endpoint expansion project, 
 - Tool count updates needed in multiple places (test files, docs)
 - Large data responses benefit from pagination or limiting (first N items)
 - Grouping data by player/entity improves readability for multi-row data
+- Always use header.index() lookup rather than hardcoded indices for extracting data
+- MeasureType parameter is key for getting different stat types (Base, Advanced, Four Factors, etc.)
+- Test failures are valuable - they catch issues before real-world usage
 
 ## References
 
