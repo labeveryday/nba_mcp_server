@@ -13,7 +13,7 @@ Uses direct HTTP calls to NBA APIs for better reliability and control.
 
 import logging
 from typing import Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 
 from mcp.server import Server
@@ -1019,7 +1019,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result = f"Game Log - {season} ({len(games)} games):\n\n"
 
             if max_pts_game:
-                result += f"HIGHEST SCORING GAME:\n"
+                result += "HIGHEST SCORING GAME:\n"
                 result += f"Date: {safe_get(max_pts_game, game_date_idx)}\n"
                 result += f"Matchup: {safe_get(max_pts_game, matchup_idx)}\n"
                 result += f"Result: {safe_get(max_pts_game, wl_idx)}\n"
@@ -1029,7 +1029,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 result += f"Minutes: {safe_get(max_pts_game, min_idx)}\n"
                 result += f"FG%: {format_stat(safe_get(max_pts_game, fg_pct_idx), True)}\n"
 
-            result += f"\n\nALL GAMES (showing top 10 by points):\n\n"
+            result += "\n\nALL GAMES (showing top 10 by points):\n\n"
 
             # Sort by points descending
             sorted_games = sorted(games, key=lambda g: float(safe_get(g, pts_idx, default=0)) if safe_get(g, pts_idx) else 0, reverse=True)
@@ -1100,7 +1100,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             fg3_pct = total_fg3m / total_fg3a if total_fg3a > 0 else 0
             ft_pct = total_ftm / total_fta if total_fta > 0 else 0
 
-            result = f"Career Statistics (Regular Season):\n\n"
+            result = "Career Statistics (Regular Season):\n\n"
             result += f"Total Points: {int(total_points):,}\n"
             result += f"Games Played: {int(total_games):,}\n"
             result += f"Total Rebounds: {int(total_rebounds):,}\n"
@@ -1108,11 +1108,11 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result += f"Total Steals: {int(total_steals):,}\n"
             result += f"Total Blocks: {int(total_blocks):,}\n"
             result += f"Total Minutes: {int(total_minutes):,}\n\n"
-            result += f"Career Averages:\n"
+            result += "Career Averages:\n"
             result += f"Points Per Game: {ppg:.1f}\n"
             result += f"Rebounds Per Game: {rpg:.1f}\n"
             result += f"Assists Per Game: {apg:.1f}\n\n"
-            result += f"Shooting Percentages:\n"
+            result += "Shooting Percentages:\n"
             result += f"FG%: {fg_pct*100:.1f}%\n"
             result += f"3P%: {fg3_pct*100:.1f}%\n"
             result += f"FT%: {ft_pct*100:.1f}%\n"
@@ -1153,20 +1153,20 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
 
             result = f"Hustle Statistics - {player_name} ({team}) [{season}]:\n\n"
             result += f"Games Played: {games}\n\n"
-            result += f"Contest & Defense:\n"
+            result += "Contest & Defense:\n"
             result += f"  Total Contested Shots: {safe_get(player_stats, 7, default=0)}\n"
             result += f"  Contested 2PT Shots: {safe_get(player_stats, 8, default=0)}\n"
             result += f"  Contested 3PT Shots: {safe_get(player_stats, 9, default=0)}\n"
             result += f"  Deflections: {safe_get(player_stats, 10, default=0)}\n"
             result += f"  Charges Drawn: {safe_get(player_stats, 11, default=0)}\n\n"
-            result += f"Screen Assists:\n"
+            result += "Screen Assists:\n"
             result += f"  Screen Assists: {safe_get(player_stats, 12, default=0)}\n"
             result += f"  Points from Screen Assists: {safe_get(player_stats, 13, default=0)}\n\n"
-            result += f"Loose Balls:\n"
+            result += "Loose Balls:\n"
             result += f"  Offensive Loose Balls: {safe_get(player_stats, 14, default=0)}\n"
             result += f"  Defensive Loose Balls: {safe_get(player_stats, 15, default=0)}\n"
             result += f"  Total Loose Balls Recovered: {safe_get(player_stats, 16, default=0)}\n\n"
-            result += f"Box Outs:\n"
+            result += "Box Outs:\n"
             result += f"  Offensive Box Outs: {safe_get(player_stats, 19, default=0)}\n"
             result += f"  Defensive Box Outs: {safe_get(player_stats, 20, default=0)}\n"
             result += f"  Total Box Outs: {safe_get(player_stats, 23, default=0)}\n"
@@ -1259,11 +1259,11 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result = f"Defensive Impact - {player_name} ({team}) [{season}]:\n\n"
             result += f"Position: {position}\n"
             result += f"Games: {games}\n\n"
-            result += f"When Defended By This Player:\n"
+            result += "When Defended By This Player:\n"
             result += f"  Opponent FGM: {dfgm}\n"
             result += f"  Opponent FGA: {dfga}\n"
             result += f"  Opponent FG%: {format_stat(dfg_pct, True)}\n\n"
-            result += f"Comparison:\n"
+            result += "Comparison:\n"
             result += f"  Opponent Normal FG%: {format_stat(normal_fg_pct, True)}\n"
             result += f"  Difference: {format_stat(diff, True)}\n"
 
@@ -1887,19 +1887,14 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 return [TextContent(type="text", text=f"No shot data found for this player in {season} season.")]
 
             # Get player name from parameters result set
-            player_info_headers = safe_get(data, "resultSets", 1, "headers", default=[])
             player_info = safe_get(data, "resultSets", 1, "rowSet", 0, default=[])
             player_name = safe_get(player_info, 4, default="Player") if player_info else "Player"
 
             # Find relevant column indices
             try:
-                loc_x_idx = headers.index("LOC_X")
-                loc_y_idx = headers.index("LOC_Y")
                 shot_made_idx = headers.index("SHOT_MADE_FLAG")
                 shot_type_idx = headers.index("ACTION_TYPE")
                 shot_distance_idx = headers.index("SHOT_DISTANCE")
-                event_type_idx = headers.index("EVENT_TYPE")
-                game_date_idx = headers.index("GAME_DATE")
             except ValueError as e:
                 logger.error(f"Missing expected column in shot chart data: {e}")
                 return [TextContent(type="text", text="Error parsing shot chart data structure.")]
@@ -1938,7 +1933,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                     distance_buckets["25+ ft"].append(made)
 
             result = f"Shot Chart - {player_name} ({season})\n\n"
-            result += f"Overall Shooting:\n"
+            result += "Overall Shooting:\n"
             result += f"  Total Shots: {total_shots}\n"
             result += f"  Made: {made_shots}\n"
             result += f"  Missed: {missed_shots}\n"
@@ -2098,8 +2093,6 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 fg3m_idx = headers.index("FG3M")
                 fg3a_idx = headers.index("FG3A")
                 fg3_pct_idx = headers.index("FG3_PCT")
-                fg2m_idx = headers.index("FGM") - safe_get(rows, 0, headers.index("FG3M"), default=0) if "FG3M" in headers else 0
-                fg2a_idx = headers.index("FGA") - safe_get(rows, 0, headers.index("FG3A"), default=0) if "FG3A" in headers else 0
 
                 row = rows[0]
                 fgm = safe_get(row, fgm_idx, default=0)
