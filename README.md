@@ -214,6 +214,19 @@ player_id: "2544"
 season: "2023-24"
 ```
 
+### get_player_game_log
+Get game-by-game log for a player's season, showing all individual games with stats. Useful for finding highest-scoring games or specific performances.
+
+**Parameters:**
+- `player_id` (string, required): NBA player ID
+- `season` (string, optional): Season in format YYYY-YY (e.g., '2002-03'). Defaults to current season.
+
+**Example:**
+```
+player_id: "893"
+season: "2002-03"
+```
+
 ### get_player_info
 Get detailed information about a player.
 

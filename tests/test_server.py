@@ -115,11 +115,11 @@ class TestToolsListRegistration:
 
     @pytest.mark.asyncio
     async def test_list_tools_count(self):
-        """Test that all 17 tools are registered."""
+        """Test that all 18 tools are registered."""
         from nba_mcp_server.server import list_tools
 
         tools = await list_tools()
-        assert len(tools) == 17
+        assert len(tools) == 18
 
     @pytest.mark.asyncio
     async def test_list_tools_names(self):
@@ -137,6 +137,7 @@ class TestToolsListRegistration:
             "search_players",
             "get_player_info",
             "get_player_season_stats",
+            "get_player_game_log",
             "get_player_career_stats",
             "get_player_hustle_stats",
             "get_league_hustle_leaders",

@@ -216,6 +216,24 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="get_player_game_log",
+            description="Get game-by-game log for a player's season, showing all individual games with stats. Useful for finding highest-scoring games or specific performances.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "player_id": {
+                        "type": "string",
+                        "description": "NBA player ID",
+                    },
+                    "season": {
+                        "type": "string",
+                        "description": "Season in format YYYY-YY (e.g., '2002-03'). Defaults to current season.",
+                    }
+                },
+                "required": ["player_id"],
+            },
+        ),
+        Tool(
             name="get_player_career_stats",
             description="Get comprehensive career statistics for a player including total points, games, averages, and more.",
             inputSchema={
@@ -880,6 +898,76 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result += f"FG%: {format_stat(safe_get(stats_data, fg_pct_idx), True)}\n"
             result += f"3P%: {format_stat(safe_get(stats_data, fg3_pct_idx), True)}\n"
             result += f"FT%: {format_stat(safe_get(stats_data, ft_pct_idx), True)}\n"
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_player_game_log":
+            player_id = arguments["player_id"]
+            season = arguments.get("season", get_current_season())
+
+            url = f"{NBA_STATS_API}/playergamelog"
+            params = {
+                "PlayerID": player_id,
+                "Season": season,
+                "SeasonType": "Regular Season"
+            }
+
+            data = await fetch_nba_data(url, params)
+
+            if not data:
+                return [TextContent(type="text", text="Error fetching game log. Please try again.")]
+
+            # Parse game log data
+            headers = safe_get(data, "resultSets", 0, "headers", default=[])
+            games = safe_get(data, "resultSets", 0, "rowSet", default=[])
+
+            if not games:
+                return [TextContent(type="text", text=f"No games found for season {season}.")]
+
+            # Map header indices
+            game_date_idx = headers.index("GAME_DATE") if "GAME_DATE" in headers else 2
+            matchup_idx = headers.index("MATCHUP") if "MATCHUP" in headers else 3
+            wl_idx = headers.index("WL") if "WL" in headers else 4
+            min_idx = headers.index("MIN") if "MIN" in headers else 5
+            pts_idx = headers.index("PTS") if "PTS" in headers else 24
+            reb_idx = headers.index("REB") if "REB" in headers else 18
+            ast_idx = headers.index("AST") if "AST" in headers else 19
+            fg_pct_idx = headers.index("FG_PCT") if "FG_PCT" in headers else 9
+
+            # Find highest scoring game
+            max_pts = 0
+            max_pts_game = None
+            for game in games:
+                pts = safe_get(game, pts_idx, default=0)
+                try:
+                    pts_val = float(pts) if pts else 0
+                    if pts_val > max_pts:
+                        max_pts = pts_val
+                        max_pts_game = game
+                except (ValueError, TypeError):
+                    pass
+
+            result = f"Game Log - {season} ({len(games)} games):\n\n"
+
+            if max_pts_game:
+                result += f"HIGHEST SCORING GAME:\n"
+                result += f"Date: {safe_get(max_pts_game, game_date_idx)}\n"
+                result += f"Matchup: {safe_get(max_pts_game, matchup_idx)}\n"
+                result += f"Result: {safe_get(max_pts_game, wl_idx)}\n"
+                result += f"Points: {safe_get(max_pts_game, pts_idx)}\n"
+                result += f"Rebounds: {safe_get(max_pts_game, reb_idx)}\n"
+                result += f"Assists: {safe_get(max_pts_game, ast_idx)}\n"
+                result += f"Minutes: {safe_get(max_pts_game, min_idx)}\n"
+                result += f"FG%: {format_stat(safe_get(max_pts_game, fg_pct_idx), True)}\n"
+
+            result += f"\n\nALL GAMES (showing top 10 by points):\n\n"
+
+            # Sort by points descending
+            sorted_games = sorted(games, key=lambda g: float(safe_get(g, pts_idx, default=0)) if safe_get(g, pts_idx) else 0, reverse=True)
+
+            for i, game in enumerate(sorted_games[:10], 1):
+                result += f"{i}. {safe_get(game, game_date_idx)} - {safe_get(game, matchup_idx)} ({safe_get(game, wl_idx)})\n"
+                result += f"   {safe_get(game, pts_idx)} PTS, {safe_get(game, reb_idx)} REB, {safe_get(game, ast_idx)} AST, {safe_get(game, min_idx)} MIN\n"
 
             return [TextContent(type="text", text=result)]
 

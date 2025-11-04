@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an **NBA MCP (Model Context Protocol) Server** that provides access to comprehensive NBA statistics and data through direct HTTP API calls to official NBA endpoints. The server exposes 16 tools for fetching player stats, game data, team information, and league-wide statistics.
+This is an **NBA MCP (Model Context Protocol) Server** that provides access to comprehensive NBA statistics and data through direct HTTP API calls to official NBA endpoints. The server exposes 18 tools for fetching player stats, game data, team information, and league-wide statistics.
 
 **Key Design Decision**: This project uses **direct HTTP calls** to NBA APIs instead of third-party wrappers like `nba_api` for better reliability, control, easier debugging, and to stay always up-to-date with NBA's API structure.
 
@@ -108,7 +108,7 @@ mcp_client = MCPClient(lambda: stdio_client(
 
 ### Tool Categories
 
-The server exposes 16 MCP tools organized into 4 categories:
+The server exposes 18 MCP tools organized into 4 categories:
 
 **Live Game Tools** (lines 394-741):
 - `get_todays_scoreboard` - Today's games with live scores
@@ -116,10 +116,11 @@ The server exposes 16 MCP tools organized into 4 categories:
 - `get_game_details` - Detailed game info with live stats
 - `get_box_score` - Full box score with player-by-player stats
 
-**Player Tools** (lines 744-1093):
+**Player Tools** (lines 744-1164):
 - `search_players` - Search players by name (searches all players including retired)
 - `get_player_info` - Player bio and career info
 - `get_player_season_stats` - Season statistics
+- `get_player_game_log` - Game-by-game log with highest-scoring games **NEW**
 - `get_player_career_stats` - Comprehensive career totals and averages
 - `get_player_hustle_stats` - Deflections, charges drawn, screen assists, loose balls, box outs
 - `get_player_defense_stats` - Defensive impact (opponent FG% when defended by player)
