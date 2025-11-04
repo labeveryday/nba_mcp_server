@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nba-mcp-server"
+version = "0.1.0"
+description = "MCP server for accessing NBA stats and data via direct API calls"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[project.scripts]
+nba-server = "nba_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+]
