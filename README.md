@@ -25,6 +25,11 @@ A Model Context Protocol (MCP) server that provides access to comprehensive NBA 
 - **get_league_leaders**: Get statistical leaders (points, assists, rebounds, etc.)
 - **get_schedule**: Get upcoming games schedule for a team (supports future games up to 90 days ahead)
 
+### Advanced Stats Tools
+- **get_player_hustle_stats**: Get hustle statistics (deflections, charges drawn, screen assists, loose balls recovered, box outs)
+- **get_league_hustle_leaders**: Get league leaders in hustle stat categories
+- **get_player_defense_stats**: Get defensive impact statistics showing opponent FG% when defended by player
+
 ## Why Direct API Calls?
 
 This server uses **direct HTTP calls** to NBA APIs instead of third-party wrappers like `nba_api`. This approach provides:
@@ -163,6 +168,10 @@ Once the server is running and connected to your MCP client, you can ask questio
 - "Get the roster for the Lakers"
 - "When do the Lakers play next?"
 - "Show me the Grizzlies schedule for the next 30 days"
+- "Get hustle stats for Jayson Tatum"
+- "Who are the league leaders in deflections?"
+- "Show me defensive impact stats for this player"
+- "Who draws the most charges in the NBA?"
 
 ## Tool Reference
 
@@ -316,6 +325,69 @@ days_ahead: 30
 - Opponent information
 - Arena details (name, city, state)
 - Game IDs for use with other tools
+
+### get_player_hustle_stats
+Get comprehensive hustle statistics for a specific player.
+
+**Parameters:**
+- `player_id` (string, required): NBA player ID
+- `season` (string, optional): Season in format YYYY-YY (e.g., '2024-25'). Defaults to current season.
+
+**Examples:**
+```
+# Get Jayson Tatum's hustle stats for 2024-25
+player_id: "1628369"
+season: "2024-25"
+```
+
+**Returns:**
+- Contested shots (total, 2PT, 3PT)
+- Deflections
+- Charges drawn
+- Screen assists and points generated
+- Loose balls recovered (offensive, defensive, total)
+- Box outs (offensive, defensive, total)
+
+### get_league_hustle_leaders
+Get league leaders in various hustle stat categories.
+
+**Parameters:**
+- `stat_category` (string, optional): Category to rank: 'deflections', 'charges', 'screen_assists', 'loose_balls', 'box_outs'. Defaults to 'deflections'.
+- `season` (string, optional): Season in format YYYY-YY (e.g., '2024-25'). Defaults to current season.
+
+**Examples:**
+```
+# Get top deflection leaders
+stat_category: "deflections"
+season: "2024-25"
+
+# Get top charge-takers
+stat_category: "charges"
+```
+
+**Returns:**
+- Top 10 players in the selected hustle category
+- Player names, teams, and stat values
+
+### get_player_defense_stats
+Get defensive impact statistics showing how opponents shoot when defended by a player.
+
+**Parameters:**
+- `player_id` (string, required): NBA player ID
+- `season` (string, optional): Season in format YYYY-YY (e.g., '2024-25'). Defaults to current season.
+
+**Examples:**
+```
+# Get defensive impact for a player
+player_id: "1628369"
+season: "2024-25"
+```
+
+**Returns:**
+- Opponent FG%, FGM, FGA when defended by this player
+- Opponent normal FG% (league average)
+- Percentage point difference
+- Analysis of defensive effectiveness
 
 ## Data Sources
 

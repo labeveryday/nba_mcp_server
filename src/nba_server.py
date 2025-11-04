@@ -229,6 +229,60 @@ async def list_tools() -> list[Tool]:
                 "required": ["player_id"],
             },
         ),
+        Tool(
+            name="get_player_hustle_stats",
+            description="Get hustle statistics including deflections, charges drawn, screen assists, loose balls recovered, and box outs.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "player_id": {
+                        "type": "string",
+                        "description": "NBA player ID",
+                    },
+                    "season": {
+                        "type": "string",
+                        "description": "Season in format YYYY-YY (e.g., '2024-25'). Defaults to current season.",
+                    }
+                },
+                "required": ["player_id"],
+            },
+        ),
+        Tool(
+            name="get_league_hustle_leaders",
+            description="Get league leaders in hustle stats categories (deflections, charges, screen assists, loose balls, box outs).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "stat_category": {
+                        "type": "string",
+                        "description": "Hustle stat category: 'deflections', 'charges', 'screen_assists', 'loose_balls', 'box_outs'. Defaults to 'deflections'.",
+                        "default": "deflections"
+                    },
+                    "season": {
+                        "type": "string",
+                        "description": "Season in format YYYY-YY (e.g., '2024-25'). Defaults to current season.",
+                    }
+                },
+            },
+        ),
+        Tool(
+            name="get_player_defense_stats",
+            description="Get defensive impact statistics showing opponent field goal percentage when defended by this player.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "player_id": {
+                        "type": "string",
+                        "description": "NBA player ID",
+                    },
+                    "season": {
+                        "type": "string",
+                        "description": "Season in format YYYY-YY (e.g., '2024-25'). Defaults to current season.",
+                    }
+                },
+                "required": ["player_id"],
+            },
+        ),
 
         # Team Tools
         Tool(
@@ -861,6 +915,161 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result += f"FG%: {fg_pct*100:.1f}%\n"
             result += f"3P%: {fg3_pct*100:.1f}%\n"
             result += f"FT%: {ft_pct*100:.1f}%\n"
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_player_hustle_stats":
+            player_id = arguments["player_id"]
+            season = arguments.get("season", get_current_season())
+
+            url = f"{NBA_STATS_API}/leaguehustlestatsplayer"
+            params = {
+                "Season": season,
+                "SeasonType": "Regular Season",
+                "PerMode": "Totals"
+            }
+
+            data = await fetch_nba_data(url, params)
+
+            if not data:
+                return [TextContent(type="text", text="Error fetching hustle stats. Please try again.")]
+
+            # Find player in results
+            rows = safe_get(data, "resultSets", 0, "rowSet", default=[])
+
+            player_stats = None
+            for row in rows:
+                if str(safe_get(row, 0)) == str(player_id):
+                    player_stats = row
+                    break
+
+            if not player_stats:
+                return [TextContent(type="text", text=f"No hustle stats found for player ID {player_id} in season {season}.")]
+
+            player_name = safe_get(player_stats, 1, default="Player")
+            team = safe_get(player_stats, 3, default="N/A")
+            games = safe_get(player_stats, 5, default=0)
+
+            result = f"Hustle Statistics - {player_name} ({team}) [{season}]:\n\n"
+            result += f"Games Played: {games}\n\n"
+            result += f"Contest & Defense:\n"
+            result += f"  Total Contested Shots: {safe_get(player_stats, 7, default=0)}\n"
+            result += f"  Contested 2PT Shots: {safe_get(player_stats, 8, default=0)}\n"
+            result += f"  Contested 3PT Shots: {safe_get(player_stats, 9, default=0)}\n"
+            result += f"  Deflections: {safe_get(player_stats, 10, default=0)}\n"
+            result += f"  Charges Drawn: {safe_get(player_stats, 11, default=0)}\n\n"
+            result += f"Screen Assists:\n"
+            result += f"  Screen Assists: {safe_get(player_stats, 12, default=0)}\n"
+            result += f"  Points from Screen Assists: {safe_get(player_stats, 13, default=0)}\n\n"
+            result += f"Loose Balls:\n"
+            result += f"  Offensive Loose Balls: {safe_get(player_stats, 14, default=0)}\n"
+            result += f"  Defensive Loose Balls: {safe_get(player_stats, 15, default=0)}\n"
+            result += f"  Total Loose Balls Recovered: {safe_get(player_stats, 16, default=0)}\n\n"
+            result += f"Box Outs:\n"
+            result += f"  Offensive Box Outs: {safe_get(player_stats, 19, default=0)}\n"
+            result += f"  Defensive Box Outs: {safe_get(player_stats, 20, default=0)}\n"
+            result += f"  Total Box Outs: {safe_get(player_stats, 23, default=0)}\n"
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_league_hustle_leaders":
+            stat_category = arguments.get("stat_category", "deflections")
+            season = arguments.get("season", get_current_season())
+
+            url = f"{NBA_STATS_API}/leaguehustlestatsplayer"
+            params = {
+                "Season": season,
+                "SeasonType": "Regular Season",
+                "PerMode": "Totals"
+            }
+
+            data = await fetch_nba_data(url, params)
+
+            if not data:
+                return [TextContent(type="text", text="Error fetching hustle stats. Please try again.")]
+
+            rows = safe_get(data, "resultSets", 0, "rowSet", default=[])
+
+            # Map stat categories to column indices
+            stat_map = {
+                "deflections": (10, "Deflections"),
+                "charges": (11, "Charges Drawn"),
+                "screen_assists": (12, "Screen Assists"),
+                "loose_balls": (16, "Loose Balls Recovered"),
+                "box_outs": (23, "Box Outs")
+            }
+
+            if stat_category not in stat_map:
+                return [TextContent(type="text", text=f"Invalid stat category. Choose from: {', '.join(stat_map.keys())}")]
+
+            col_idx, stat_name = stat_map[stat_category]
+
+            # Sort by the stat and get top 10
+            sorted_players = sorted(rows, key=lambda x: float(safe_get(x, col_idx, default=0)), reverse=True)[:10]
+
+            result = f"League Leaders - {stat_name} ({season}):\n\n"
+            for i, player in enumerate(sorted_players, 1):
+                name = safe_get(player, 1, default="Unknown")
+                team = safe_get(player, 3, default="N/A")
+                value = safe_get(player, col_idx, default=0)
+                result += f"{i}. {name} ({team}): {value}\n"
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_player_defense_stats":
+            player_id = arguments["player_id"]
+            season = arguments.get("season", get_current_season())
+
+            url = f"{NBA_STATS_API}/leaguedashptdefend"
+            params = {
+                "Season": season,
+                "SeasonType": "Regular Season",
+                "PerMode": "Totals",
+                "DefenseCategory": "Overall"
+            }
+
+            data = await fetch_nba_data(url, params)
+
+            if not data:
+                return [TextContent(type="text", text="Error fetching defense stats. Please try again.")]
+
+            rows = safe_get(data, "resultSets", 0, "rowSet", default=[])
+
+            player_stats = None
+            for row in rows:
+                if str(safe_get(row, 0)) == str(player_id):
+                    player_stats = row
+                    break
+
+            if not player_stats:
+                return [TextContent(type="text", text=f"No defense stats found for player ID {player_id} in season {season}.")]
+
+            player_name = safe_get(player_stats, 1, default="Player")
+            team = safe_get(player_stats, 3, default="N/A")
+            position = safe_get(player_stats, 4, default="N/A")
+            games = safe_get(player_stats, 6, default=0)
+
+            dfgm = safe_get(player_stats, 9, default=0)
+            dfga = safe_get(player_stats, 10, default=0)
+            dfg_pct = safe_get(player_stats, 11, default=0)
+            normal_fg_pct = safe_get(player_stats, 12, default=0)
+            diff = safe_get(player_stats, 13, default=0)
+
+            result = f"Defensive Impact - {player_name} ({team}) [{season}]:\n\n"
+            result += f"Position: {position}\n"
+            result += f"Games: {games}\n\n"
+            result += f"When Defended By This Player:\n"
+            result += f"  Opponent FGM: {dfgm}\n"
+            result += f"  Opponent FGA: {dfga}\n"
+            result += f"  Opponent FG%: {format_stat(dfg_pct, True)}\n\n"
+            result += f"Comparison:\n"
+            result += f"  Opponent Normal FG%: {format_stat(normal_fg_pct, True)}\n"
+            result += f"  Difference: {format_stat(diff, True)}\n"
+
+            if float(diff) < 0:
+                result += f"\n✓ This player holds opponents to {abs(float(diff)*100):.1f}% below their normal shooting."
+            else:
+                result += f"\n⚠ Opponents shoot {float(diff)*100:.1f}% better against this player."
 
             return [TextContent(type="text", text=result)]
 
