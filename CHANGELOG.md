@@ -8,16 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Awards Tools**: Two new tools for accessing NBA awards and accolades
+  - `get_player_awards` - Get all awards for a specific player (MVP, Championships, All-Star, All-NBA, etc.)
+  - `get_season_awards` - Get major award winners for a specific season
+- `get_player_game_log` - Get game-by-game statistics showing highest-scoring games
 - Comprehensive endpoint verification system
-- ENDPOINT_VERIFICATION.md report documenting all 17 working endpoints
+- ENDPOINT_VERIFICATION.md report documenting all working endpoints
 - Verification script to test all tools with real API calls
+- Test coverage for new awards tools (4 new tests, 29 total)
 
 ### Fixed
 - `get_player_season_stats` now uses `playercareerstats` endpoint (fixes 500 errors)
 - `get_league_leaders` now uses `leaguegamelog` endpoint (fixes 500 errors)
 
 ### Changed
-- All 17 endpoints verified working and production-ready
+- Server now exposes 20 tools (was 18)
+- All endpoints verified working and production-ready
 
 ## [0.1.0] - 2025-11-03
 

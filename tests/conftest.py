@@ -82,3 +82,25 @@ def sample_all_time_leaders_data():
             }
         ]
     }
+
+
+@pytest.fixture
+def sample_player_awards_data():
+    """Sample player awards data from NBA API."""
+    return {
+        "resultSets": [
+            {
+                "name": "PlayerAwards",
+                "headers": ["PERSON_ID", "FIRST_NAME", "LAST_NAME", "TEAM", "DESCRIPTION", "ALL_NBA_TEAM_NUMBER", "SEASON", "MONTH", "WEEK", "CONFERENCE", "TYPE", "SUBTYPE1", "SUBTYPE2", "SUBTYPE3"],
+                "rowSet": [
+                    [2544, "LeBron", "James", "Miami Heat", "NBA Most Valuable Player", None, "2012-13", None, None, None, "Award", None, None, None],
+                    [2544, "LeBron", "James", "Miami Heat", "NBA Most Valuable Player", None, "2011-12", None, None, None, "Award", None, None, None],
+                    [2544, "LeBron", "James", "Miami Heat", "NBA Finals Most Valuable Player", None, "2012-13", None, None, None, "Award", None, None, None],
+                    [2544, "LeBron", "James", "Miami Heat", "NBA Champion", None, "2012-13", None, None, None, "Award", None, None, None],
+                    [2544, "LeBron", "James", "Cleveland Cavaliers", "NBA All-Star", None, "2012-13", None, None, "East", "Award", None, None, None],
+                    [2544, "LeBron", "James", "Cleveland Cavaliers", "All-NBA", "1", "2012-13", None, None, None, "Award", None, None, None],
+                    [2544, "LeBron", "James", "Cleveland Cavaliers", "All-Defensive Team", "1", "2012-13", None, None, None, "Award", None, None, None],
+                ]
+            }
+        ]
+    }

@@ -12,7 +12,9 @@ A Model Context Protocol (MCP) server that provides access to comprehensive NBA 
 - **search_players**: Search for NBA players by name
 - **get_player_career_stats**: Get comprehensive career statistics
 - **get_player_season_stats**: Get player stats for a specific season
+- **get_player_game_log**: Get game-by-game statistics for a player's season
 - **get_player_info**: Get detailed player information (bio, height, weight, position, etc.)
+- **get_player_awards**: Get all awards and accolades for a specific player
 
 ### Team Tools
 - **get_all_teams**: Get list of all NBA teams with IDs and names
@@ -29,6 +31,7 @@ A Model Context Protocol (MCP) server that provides access to comprehensive NBA 
 - **get_league_leaders**: Get statistical leaders for current season (points, assists, rebounds, etc.)
 - **get_all_time_leaders**: Get all-time career leaders across NBA history (points, rebounds, assists, steals, blocks, etc.)
 - **get_schedule**: Get upcoming games schedule for a team (supports future games up to 90 days ahead)
+- **get_season_awards**: Get major award winners for a specific season (MVP, ROTY, etc.)
 
 ### Advanced Stats Tools
 - **get_player_hustle_stats**: Get hustle statistics (deflections, charges drawn, screen assists, loose balls recovered, box outs)
@@ -180,6 +183,9 @@ Once the server is running and connected to your MCP client, you can ask questio
 - "Who are the league leaders in deflections?"
 - "Show me defensive impact stats for this player"
 - "Who draws the most charges in the NBA?"
+- "Show me all of LeBron James' awards and accolades"
+- "Who won MVP in the 2002-03 season?"
+- "Get Tim Duncan's career awards"
 
 ## Tool Reference
 
@@ -432,6 +438,47 @@ season: "2024-25"
 - Opponent normal FG% (league average)
 - Percentage point difference
 - Analysis of defensive effectiveness
+
+### get_player_awards
+Get all awards and accolades for a specific player.
+
+**Parameters:**
+- `player_id` (string, required): NBA player ID (use search_players to find)
+
+**Example:**
+```
+player_id: "2544"  # LeBron James
+```
+
+**Returns:**
+- NBA MVP awards
+- Finals MVP awards
+- NBA Championships
+- All-NBA Team selections
+- All-Defensive Team selections
+- All-Star selections
+- All-Star Game MVP awards
+- Rookie awards
+- Other honors and achievements
+- Total award count
+
+### get_season_awards
+Get major award winners for a specific NBA season.
+
+**Parameters:**
+- `season` (string, optional): Season in format YYYY-YY (e.g., '2002-03'). Defaults to current season.
+
+**Example:**
+```
+season: "2002-03"
+```
+
+**Returns:**
+- NBA Most Valuable Player (MVP)
+- Note: For comprehensive season award information including Finals MVP, ROTY, DPOY, MIP, 6MOY, and All-NBA teams, use the get_player_awards tool to look up individual award winners.
+
+**Available Seasons:**
+- 2000-01 through 2023-24
 
 ## Data Sources
 

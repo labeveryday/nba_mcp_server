@@ -110,16 +110,79 @@ class TestCallTool:
             assert "Error" in result[0].text
 
 
+class TestAwardsTools:
+    """Tests for awards tools."""
+
+    @pytest.mark.asyncio
+    async def test_get_player_awards(self, sample_player_awards_data):
+        """Test get_player_awards tool."""
+        with patch('nba_mcp_server.server.fetch_nba_data') as mock_fetch:
+            mock_fetch.return_value = sample_player_awards_data
+
+            result = await call_tool("get_player_awards", {
+                "player_id": "2544"
+            })
+
+            assert len(result) == 1
+            assert isinstance(result[0], TextContent)
+            assert "LeBron James" in result[0].text
+            assert "NBA MVP" in result[0].text
+            assert "2012-13" in result[0].text
+            assert "Finals MVP" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_get_player_awards_no_data(self):
+        """Test get_player_awards with no awards."""
+        with patch('nba_mcp_server.server.fetch_nba_data') as mock_fetch:
+            mock_fetch.return_value = {
+                "resultSets": [
+                    {
+                        "headers": ["PERSON_ID", "FIRST_NAME", "LAST_NAME"],
+                        "rowSet": []
+                    }
+                ]
+            }
+
+            result = await call_tool("get_player_awards", {
+                "player_id": "9999"
+            })
+
+            assert len(result) == 1
+            assert "No awards found" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_get_season_awards(self):
+        """Test get_season_awards tool."""
+        result = await call_tool("get_season_awards", {
+            "season": "2002-03"
+        })
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "2002-03" in result[0].text
+        assert "Tim Duncan" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_get_season_awards_unavailable(self):
+        """Test get_season_awards with unavailable season."""
+        result = await call_tool("get_season_awards", {
+            "season": "1950-51"
+        })
+
+        assert len(result) == 1
+        assert "not available" in result[0].text
+
+
 class TestToolsListRegistration:
     """Test that all tools are registered."""
 
     @pytest.mark.asyncio
     async def test_list_tools_count(self):
-        """Test that all 18 tools are registered."""
+        """Test that all 20 tools are registered."""
         from nba_mcp_server.server import list_tools
 
         tools = await list_tools()
-        assert len(tools) == 18
+        assert len(tools) == 20
 
     @pytest.mark.asyncio
     async def test_list_tools_names(self):
@@ -148,6 +211,8 @@ class TestToolsListRegistration:
             "get_standings",
             "get_league_leaders",
             "get_schedule",
+            "get_player_awards",
+            "get_season_awards",
         ]
 
         for expected in expected_tools:

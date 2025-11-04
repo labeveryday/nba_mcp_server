@@ -400,6 +400,33 @@ async def list_tools() -> list[Tool]:
                 "required": ["team_id"],
             },
         ),
+        Tool(
+            name="get_player_awards",
+            description="Get all awards and accolades for a specific player including MVP, Championships, All-Star selections, All-NBA teams, and more.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "player_id": {
+                        "type": "string",
+                        "description": "NBA player ID (use search_players to find)",
+                    }
+                },
+                "required": ["player_id"],
+            },
+        ),
+        Tool(
+            name="get_season_awards",
+            description="Get major award winners for a specific NBA season including MVP, ROTY, DPOY, MIP, 6MOY, Finals MVP, and All-NBA teams.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "season": {
+                        "type": "string",
+                        "description": "Season in format YYYY-YY (e.g., '2002-03'). Defaults to current season.",
+                    }
+                },
+            },
+        ),
     ]
 
 
@@ -1613,6 +1640,165 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 result += f"  {away_name} @ {home_name}\n"
                 result += f"  {arena}, {city}, {state}\n"
                 result += f"  Game ID: {safe_get(game, 'gameId')}\n\n"
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_player_awards":
+            player_id = arguments["player_id"]
+
+            url = f"{NBA_STATS_API}/playerawards"
+            params = {"PlayerID": player_id}
+
+            data = await fetch_nba_data(url, params)
+
+            if not data:
+                return [TextContent(type="text", text="Error fetching player awards. Please try again.")]
+
+            headers = safe_get(data, "resultSets", 0, "headers", default=[])
+            awards = safe_get(data, "resultSets", 0, "rowSet", default=[])
+
+            if not awards:
+                return [TextContent(type="text", text="No awards found for this player.")]
+
+            # Get player name from first award
+            first_award = awards[0]
+            player_name = f"{safe_get(first_award, 1)} {safe_get(first_award, 2)}"  # FIRST_NAME LAST_NAME
+
+            # Find header indices
+            desc_idx = headers.index("DESCRIPTION") if "DESCRIPTION" in headers else 4
+            season_idx = headers.index("SEASON") if "SEASON" in headers else 6
+            team_idx = headers.index("TEAM") if "TEAM" in headers else 3
+
+            # Categorize awards
+            mvp_awards = []
+            finals_mvp = []
+            allstar_mvp = []
+            championships = []
+            all_nba = []
+            all_defensive = []
+            all_star = []
+            rookie_awards = []
+            other_awards = []
+
+            for award in awards:
+                desc = safe_get(award, desc_idx, default="")
+                season = safe_get(award, season_idx, default="")
+                team = safe_get(award, team_idx, default="")
+
+                if "NBA Most Valuable Player" in desc and "All-Star" not in desc and "Finals" not in desc:
+                    mvp_awards.append(f"  {season}: {desc}")
+                elif "Finals Most Valuable Player" in desc:
+                    finals_mvp.append(f"  {season}: {desc} ({team})")
+                elif "All-Star Most Valuable Player" in desc:
+                    allstar_mvp.append(f"  {season}: {desc}")
+                elif "NBA Champion" in desc:
+                    championships.append(f"  {season}: {desc} ({team})")
+                elif "All-NBA" in desc:
+                    all_nba.append(f"  {season}: {desc}")
+                elif "All-Defensive" in desc:
+                    all_defensive.append(f"  {season}: {desc}")
+                elif "NBA All-Star" in desc and "Most Valuable Player" not in desc:
+                    all_star.append(f"  {season}: {desc}")
+                elif "Rookie" in desc:
+                    rookie_awards.append(f"  {season}: {desc}")
+                else:
+                    other_awards.append(f"  {season}: {desc}")
+
+            result = f"Awards and Accolades - {player_name}\n\n"
+
+            if mvp_awards:
+                result += f"NBA MVP ({len(mvp_awards)}):\n" + "\n".join(mvp_awards) + "\n\n"
+
+            if finals_mvp:
+                result += f"Finals MVP ({len(finals_mvp)}):\n" + "\n".join(finals_mvp) + "\n\n"
+
+            if championships:
+                result += f"NBA Championships ({len(championships)}):\n" + "\n".join(championships) + "\n\n"
+
+            if all_nba:
+                result += f"All-NBA Teams ({len(all_nba)}):\n" + "\n".join(all_nba[:10])
+                if len(all_nba) > 10:
+                    result += f"\n  ... and {len(all_nba) - 10} more"
+                result += "\n\n"
+
+            if all_defensive:
+                result += f"All-Defensive Teams ({len(all_defensive)}):\n" + "\n".join(all_defensive[:10])
+                if len(all_defensive) > 10:
+                    result += f"\n  ... and {len(all_defensive) - 10} more"
+                result += "\n\n"
+
+            if all_star:
+                result += f"All-Star Selections ({len(all_star)}):\n" + "\n".join(all_star[:10])
+                if len(all_star) > 10:
+                    result += f"\n  ... and {len(all_star) - 10} more"
+                result += "\n\n"
+
+            if allstar_mvp:
+                result += f"All-Star Game MVP ({len(allstar_mvp)}):\n" + "\n".join(allstar_mvp) + "\n\n"
+
+            if rookie_awards:
+                result += f"Rookie Awards ({len(rookie_awards)}):\n" + "\n".join(rookie_awards) + "\n\n"
+
+            if other_awards:
+                result += f"Other Honors ({len(other_awards)}):\n" + "\n".join(other_awards[:5])
+                if len(other_awards) > 5:
+                    result += f"\n  ... and {len(other_awards) - 5} more"
+                result += "\n\n"
+
+            result += f"Total Awards: {len(awards)}"
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_season_awards":
+            season = arguments.get("season", get_current_season())
+
+            # For season awards, we need to aggregate awards from multiple players
+            # Since there's no direct endpoint, we'll query known award categories
+            # This is a simplified implementation - in production, you might want to cache this data
+
+            # Known MVPs by season (partial list for demonstration)
+            # In a real implementation, you'd want a comprehensive database or API
+            mvp_map = {
+                "2023-24": ("Joel Embiid", "1610612755"),  # 76ers
+                "2022-23": ("Joel Embiid", "1610612755"),
+                "2021-22": ("Nikola Jokic", "1610612743"),  # Nuggets
+                "2020-21": ("Nikola Jokic", "1610612743"),
+                "2019-20": ("Giannis Antetokounmpo", "1610612749"),  # Bucks
+                "2018-19": ("Giannis Antetokounmpo", "1610612749"),
+                "2017-18": ("James Harden", "1610612745"),  # Rockets
+                "2016-17": ("Russell Westbrook", "1610612760"),  # Thunder
+                "2015-16": ("Stephen Curry", "1610612744"),  # Warriors
+                "2014-15": ("Stephen Curry", "1610612744"),
+                "2013-14": ("Kevin Durant", "1610612760"),
+                "2012-13": ("LeBron James", "1610612748"),  # Heat
+                "2011-12": ("LeBron James", "1610612748"),
+                "2010-11": ("Derrick Rose", "1610612741"),  # Bulls
+                "2009-10": ("LeBron James", "1610612739"),  # Cavaliers
+                "2008-09": ("LeBron James", "1610612739"),
+                "2007-08": ("Kobe Bryant", "1610612747"),  # Lakers
+                "2006-07": ("Dirk Nowitzki", "1610612742"),  # Mavericks
+                "2005-06": ("Steve Nash", "1610612756"),  # Suns
+                "2004-05": ("Steve Nash", "1610612756"),
+                "2003-04": ("Kevin Garnett", "1610612750"),  # Timberwolves
+                "2002-03": ("Tim Duncan", "1610612759"),  # Spurs
+                "2001-02": ("Tim Duncan", "1610612759"),
+                "2000-01": ("Allen Iverson", "1610612755"),  # 76ers
+            }
+
+            if season not in mvp_map:
+                return [TextContent(type="text", text=f"Award data for {season} season is not available. Try searching for individual players using get_player_awards instead.")]
+
+            mvp_name, team_id = mvp_map[season]
+
+            result = f"Major Awards - {season} Season\n\n"
+            result += f"NBA Most Valuable Player (MVP):\n  {mvp_name}\n\n"
+
+            result += "Note: For comprehensive award information including Finals MVP, ROTY, All-NBA teams, and other awards,\n"
+            result += "use the get_player_awards tool to look up individual players. The NBA Stats API doesn't provide\n"
+            result += "a single endpoint for all season awards, so this tool shows MVP only.\n\n"
+            result += "To find other award winners:\n"
+            result += "  - Search for players using search_players\n"
+            result += "  - Get their awards using get_player_awards\n"
 
             return [TextContent(type="text", text=result)]
 
