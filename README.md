@@ -1,4 +1,6 @@
-# NBA MCP Server
+🏀 NBA MCP SERVER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Access comprehensive NBA statistics via Model Context Protocol
 
 A Model Context Protocol (MCP) server that provides access to comprehensive NBA statistics and data. This server allows MCP clients to fetch player stats, game data, team information, and league-wide statistics.
 
