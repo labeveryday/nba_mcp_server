@@ -38,6 +38,10 @@ A Model Context Protocol (MCP) server that provides access to comprehensive NBA 
 - **get_league_hustle_leaders**: Get league leaders in hustle stat categories
 - **get_player_defense_stats**: Get defensive impact statistics showing opponent FG% when defended by player
 
+### Shot Chart & Shooting Tools
+- **get_shot_chart**: Get shot chart data with X/Y coordinates for every shot attempt, showing shooting patterns by distance and shot type
+- **get_shooting_splits**: Get detailed shooting percentages by zone (restricted area, paint, mid-range, corner 3, above the break 3) and distance ranges
+
 ## Why Direct API Calls?
 
 This server uses **direct HTTP calls** to NBA APIs instead of third-party wrappers like `nba_api`. This approach provides:
@@ -186,6 +190,9 @@ Once the server is running and connected to your MCP client, you can ask questio
 - "Show me all of LeBron James' awards and accolades"
 - "Who won MVP in the 2002-03 season?"
 - "Get Tim Duncan's career awards"
+- "Show me Stephen Curry's shot chart for this season"
+- "Get shooting splits by zone for Kevin Durant"
+- "Where does LeBron shoot best on the court?"
 
 ## Tool Reference
 
@@ -479,6 +486,44 @@ season: "2002-03"
 
 **Available Seasons:**
 - 2000-01 through 2023-24
+
+### get_shot_chart
+Get shot chart data with X/Y coordinates for every shot attempt by a player. Useful for visualizing shooting patterns and identifying hot zones.
+
+**Parameters:**
+- `player_id` (string, required): NBA player ID (use search_players to find)
+- `season` (string, optional): Season in format YYYY-YY (e.g., '2024-25'). Defaults to current season.
+- `game_id` (string, optional): Specific game ID to get shot chart for single game
+
+**Example:**
+```
+player_id: "2544"
+season: "2024-25"
+```
+
+**Returns:**
+- Overall shooting statistics (total shots, makes, misses, FG%)
+- Shooting by distance ranges (0-5 ft, 5-10 ft, 10-15 ft, etc.)
+- Top shot types with accuracy (layups, jump shots, dunks, etc.)
+- Note: Contains X/Y coordinates for all shots for visualization
+
+### get_shooting_splits
+Get detailed shooting percentages by zone and distance. Shows where a player is most efficient on the court.
+
+**Parameters:**
+- `player_id` (string, required): NBA player ID (use search_players to find)
+- `season` (string, optional): Season in format YYYY-YY (e.g., '2024-25'). Defaults to current season.
+
+**Example:**
+```
+player_id: "2544"
+season: "2024-25"
+```
+
+**Returns:**
+- Shooting by distance ranges (Less than 5 ft, 5-9 ft, 10-14 ft, etc.)
+- Shooting by area (Restricted Area, In The Paint, Mid-Range, Left Corner 3, Right Corner 3, Above the Break 3)
+- Overall shooting stats (Total FG, 2-Point FG, 3-Point FG with percentages)
 
 ## Data Sources
 

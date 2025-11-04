@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an **NBA MCP (Model Context Protocol) Server** that provides access to comprehensive NBA statistics and data through direct HTTP API calls to official NBA endpoints. The server exposes 20 tools for fetching player stats, game data, team information, league-wide statistics, and player awards.
+This is an **NBA MCP (Model Context Protocol) Server** that provides access to comprehensive NBA statistics and data through direct HTTP API calls to official NBA endpoints. The server exposes 22 tools for fetching player stats, game data, team information, league-wide statistics, player awards, and shooting analytics.
 
 **Key Design Decision**: This project uses **direct HTTP calls** to NBA APIs instead of third-party wrappers like `nba_api` for better reliability, control, easier debugging, and to stay always up-to-date with NBA's API structure.
 
-**Architecture**: Single-module implementation (`src/nba_mcp_server/server.py`) containing all server logic, tool handlers, and utilities (~1528 lines).
+**Architecture**: Single-module implementation (`src/nba_mcp_server/server.py`) containing all server logic, tool handlers, and utilities (~2149 lines).
 
 ## Development Commands
 
@@ -53,6 +53,19 @@ uv run pytest tests/test_server.py::TestGetAllTeams
 
 # Run with verbose output
 uv run pytest -v
+```
+
+### Code Quality & Linting
+
+```bash
+# Check code with ruff
+uv run ruff check src/
+
+# Format code with ruff
+uv run ruff format src/
+
+# Check and fix issues
+uv run ruff check --fix src/
 ```
 
 The test suite includes:
@@ -108,7 +121,7 @@ mcp_client = MCPClient(lambda: stdio_client(
 
 ### Tool Categories
 
-The server exposes 20 MCP tools organized into 4 categories:
+The server exposes 22 MCP tools organized into 5 categories:
 
 **Live Game Tools**:
 - `get_todays_scoreboard` - Today's games with live scores
@@ -137,6 +150,10 @@ The server exposes 20 MCP tools organized into 4 categories:
 - `get_league_hustle_leaders` - League leaders in hustle stats
 - `get_schedule` - Team schedule with future games (up to 90 days ahead)
 - `get_season_awards` - Major award winners for a specific season (MVP)
+
+**Shot Chart & Shooting Tools** (New in Phase 1):
+- `get_shot_chart` - Shot locations with X/Y coordinates, distance breakdowns, and shot type analysis
+- `get_shooting_splits` - Shooting percentages by zone (paint, mid-range, 3PT) and distance ranges
 
 ### Helper Functions
 
@@ -188,21 +205,22 @@ score = safe_get(home_team, "score", default=0)
 2. **Rate Limiting**: NBA APIs may rate limit requests - handled gracefully with error messages
 3. **Schedule API Data**: The scheduleLeagueV2.json endpoint provides the full season schedule including future games, but data structure differs from Stats API (uses nested objects instead of resultSets arrays)
 4. **Player Search**: The `search_players` tool sets `IsOnlyCurrentSeason=0` to include retired players in results
-5. **League Leaders Endpoint**: The original `leagueleaders` endpoint frequently returns 500 errors. The `get_league_leaders` tool now uses `leaguegamelog` and aggregates game-by-game data to calculate season averages (lines 1218-1321)
-6. **Player Season Stats Endpoint**: The `playerdashboardbyyearoveryear` endpoint frequently returns 500 errors. The `get_player_season_stats` tool now uses `playercareerstats` and filters by season (lines 825-884)
+5. **League Leaders Endpoint**: The original `leagueleaders` endpoint frequently returns 500 errors. The `get_league_leaders` tool now uses `leaguegamelog` and aggregates game-by-game data to calculate season averages
+6. **Player Season Stats Endpoint**: The `playerdashboardbyyearoveryear` endpoint frequently returns 500 errors. The `get_player_season_stats` tool now uses `playercareerstats` and filters by season
 
 ## Working with the Code
 
 ### Adding New Tools
-1. Add tool definition in `@server.list_tools()` handler (lines 115-385)
+1. Add tool definition in `@server.list_tools()` handler (lines 115+)
    - Define the tool name, description, and inputSchema
    - Follow existing patterns for parameter definitions
-2. Implement tool logic in `@server.call_tool()` handler (lines 388-1457)
+2. Implement tool logic in `@server.call_tool()` handler (after tool definitions)
    - Add new `elif name == "tool_name":` block
    - Use `fetch_nba_data()` for all API calls
    - Use `safe_get()` for data extraction
    - Return list of `TextContent` objects
-3. Test thoroughly with MCP client
+3. Add tests in `tests/test_server.py` with appropriate mocking
+4. Test thoroughly with MCP client
 
 ### Testing API Endpoints
 The server uses synchronous httpx client (`http_client` on line 45) within async handlers. When testing new endpoints:
@@ -222,22 +240,22 @@ The server uses synchronous httpx client (`http_client` on line 45) within async
 ### Single-Module Design
 - The entire server is implemented in one module (`src/nba_mcp_server/server.py`) for simplicity
 - No need to navigate multiple modules - all logic is in one place
-- ~1528 lines total including all tools, helpers, and server setup
+- ~2149 lines total including all tools, helpers, and server setup
 - Package structure follows Python best practices for PyPI distribution
 
 ### Hardcoded Team Data
-- Team IDs and names are hardcoded in two places:
-  - `get_all_teams` tool (lines 1098-1135)
-  - `get_schedule` tool (lines 1409-1426)
+- Team IDs and names are hardcoded in the `get_all_teams` tool and referenced in `get_schedule`
 - This is intentional and more reliable than API lookups
 - All 30 NBA teams are included
+- Use grep/search to find team ID mappings if you need to reference them
 
 ### API Preference Strategy
 - Live Data API is preferred over Stats API when both are available
-- `get_box_score` tries Live Data first (line 548), falls back to Stats API (line 657)
+- `get_box_score` tries Live Data first, then falls back to Stats API if needed
 - Live Data provides cleaner, more real-time data during games
 - Stats API is better for historical data and detailed statistics
-- When primary endpoints fail (e.g., `leagueleaders`), we use alternative endpoints like `leaguegamelog` with data aggregation
+- When primary endpoints fail (e.g., `leagueleaders` returning 500 errors), we use alternative endpoints like `leaguegamelog` with client-side data aggregation
+- This fallback strategy improves reliability when NBA's APIs have issues
 
 ### Response Format
 - All tool responses are formatted as human-readable text, not JSON

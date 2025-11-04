@@ -178,11 +178,11 @@ class TestToolsListRegistration:
 
     @pytest.mark.asyncio
     async def test_list_tools_count(self):
-        """Test that all 20 tools are registered."""
+        """Test that all 22 tools are registered."""
         from nba_mcp_server.server import list_tools
 
         tools = await list_tools()
-        assert len(tools) == 20
+        assert len(tools) == 22
 
     @pytest.mark.asyncio
     async def test_list_tools_names(self):
@@ -213,7 +213,105 @@ class TestToolsListRegistration:
             "get_schedule",
             "get_player_awards",
             "get_season_awards",
+            "get_shot_chart",
+            "get_shooting_splits",
         ]
 
         for expected in expected_tools:
             assert expected in tool_names
+
+
+class TestShotChartTools:
+    """Test shot chart and shooting tools."""
+
+    @pytest.mark.asyncio
+    async def test_get_shot_chart(self, mock_httpx_response, sample_shot_chart_data):
+        """Test get_shot_chart tool."""
+        from nba_mcp_server.server import call_tool
+
+        mock_response = mock_httpx_response(200, sample_shot_chart_data)
+
+        with patch('nba_mcp_server.server.http_client') as mock_client:
+            mock_client.get.return_value = mock_response
+            result = await call_tool("get_shot_chart", {
+                "player_id": "2544",
+                "season": "2024-25"
+            })
+
+            assert len(result) == 1
+            assert isinstance(result[0], TextContent)
+            assert "Shot Chart" in result[0].text
+            assert "Total Shots" in result[0].text
+            assert "Shooting by Distance" in result[0].text
+            assert "Top Shot Types" in result[0].text
+            assert "Layup Shot" in result[0].text  # Verify shot types are parsed
+            assert "5" in result[0].text  # Verify shot count
+
+    @pytest.mark.asyncio
+    async def test_get_shot_chart_no_data(self, mock_httpx_response):
+        """Test get_shot_chart with no shot data."""
+        from nba_mcp_server.server import call_tool
+
+        empty_data = {
+            "resultSets": [
+                {
+                    "name": "Shot_Chart_Detail",
+                    "headers": ["PLAYER_NAME", "LOC_X", "LOC_Y", "SHOT_MADE_FLAG"],
+                    "rowSet": []
+                }
+            ]
+        }
+        mock_response = mock_httpx_response(200, empty_data)
+
+        with patch('nba_mcp_server.server.http_client') as mock_client:
+            mock_client.get.return_value = mock_response
+            result = await call_tool("get_shot_chart", {
+                "player_id": "2544",
+                "season": "2024-25"
+            })
+
+            assert len(result) == 1
+            assert "No shot data found" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_get_shooting_splits(self, mock_httpx_response, sample_shooting_splits_data):
+        """Test get_shooting_splits tool."""
+        from nba_mcp_server.server import call_tool
+
+        mock_response = mock_httpx_response(200, sample_shooting_splits_data)
+
+        with patch('nba_mcp_server.server.http_client') as mock_client:
+            mock_client.get.return_value = mock_response
+            result = await call_tool("get_shooting_splits", {
+                "player_id": "2544",
+                "season": "2024-25"
+            })
+
+            assert len(result) == 1
+            assert isinstance(result[0], TextContent)
+            assert "Shooting Splits" in result[0].text
+            assert "Shooting by Distance" in result[0].text
+            assert "Shooting by Area" in result[0].text
+            assert "Overall Shooting" in result[0].text
+            assert "Restricted Area" in result[0].text  # Verify areas are parsed
+            assert "Mid-Range" in result[0].text  # Verify zones are included
+
+    @pytest.mark.asyncio
+    async def test_get_shooting_splits_no_data(self, mock_httpx_response):
+        """Test get_shooting_splits with no data."""
+        from nba_mcp_server.server import call_tool
+
+        empty_data = {
+            "resultSets": []
+        }
+        mock_response = mock_httpx_response(200, empty_data)
+
+        with patch('nba_mcp_server.server.http_client') as mock_client:
+            mock_client.get.return_value = mock_response
+            result = await call_tool("get_shooting_splits", {
+                "player_id": "2544",
+                "season": "2024-25"
+            })
+
+            assert len(result) == 1
+            assert "No shooting data found" in result[0].text

@@ -427,6 +427,48 @@ async def list_tools() -> list[Tool]:
                 },
             },
         ),
+
+        # Shot Chart & Shooting Tools
+        Tool(
+            name="get_shot_chart",
+            description="Get shot chart data with X/Y coordinates for every shot attempt by a player. Useful for visualizing shooting patterns and hot zones.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "player_id": {
+                        "type": "string",
+                        "description": "NBA player ID (use search_players to find)",
+                    },
+                    "season": {
+                        "type": "string",
+                        "description": "Season in format YYYY-YY (e.g., '2024-25'). Defaults to current season.",
+                    },
+                    "game_id": {
+                        "type": "string",
+                        "description": "Optional: Specific game ID to get shot chart for single game",
+                    }
+                },
+                "required": ["player_id"],
+            },
+        ),
+        Tool(
+            name="get_shooting_splits",
+            description="Get shooting percentages by zone and distance (paint, mid-range, 3PT, corner 3, etc.). Shows where player is most efficient.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "player_id": {
+                        "type": "string",
+                        "description": "NBA player ID (use search_players to find)",
+                    },
+                    "season": {
+                        "type": "string",
+                        "description": "Season in format YYYY-YY (e.g., '2024-25'). Defaults to current season.",
+                    }
+                },
+                "required": ["player_id"],
+            },
+        ),
     ]
 
 
@@ -1799,6 +1841,287 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             result += "To find other award winners:\n"
             result += "  - Search for players using search_players\n"
             result += "  - Get their awards using get_player_awards\n"
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_shot_chart":
+            player_id = arguments.get("player_id")
+            season = arguments.get("season", get_current_season())
+            game_id = arguments.get("game_id", "")
+
+            # Build parameters for shotchartdetail endpoint
+            params = {
+                "PlayerID": player_id,
+                "Season": season,
+                "SeasonType": "Regular Season",
+                "TeamID": "0",
+                "GameID": game_id,
+                "Outcome": "",
+                "Location": "",
+                "Month": "0",
+                "SeasonSegment": "",
+                "DateFrom": "",
+                "DateTo": "",
+                "OpponentTeamID": "0",
+                "VsConference": "",
+                "VsDivision": "",
+                "Position": "",
+                "RookieYear": "",
+                "GameSegment": "",
+                "Period": "0",
+                "LastNGames": "0",
+                "ContextMeasure": "FGA",
+            }
+
+            url = f"{NBA_STATS_API}/shotchartdetail"
+            data = await fetch_nba_data(url, params=params)
+
+            if not data:
+                return [TextContent(type="text", text="Failed to fetch shot chart data. The NBA API may be unavailable.")]
+
+            # Extract shot data
+            headers = safe_get(data, "resultSets", 0, "headers", default=[])
+            shots = safe_get(data, "resultSets", 0, "rowSet", default=[])
+
+            if not shots:
+                return [TextContent(type="text", text=f"No shot data found for this player in {season} season.")]
+
+            # Get player name from parameters result set
+            player_info_headers = safe_get(data, "resultSets", 1, "headers", default=[])
+            player_info = safe_get(data, "resultSets", 1, "rowSet", 0, default=[])
+            player_name = safe_get(player_info, 4, default="Player") if player_info else "Player"
+
+            # Find relevant column indices
+            try:
+                loc_x_idx = headers.index("LOC_X")
+                loc_y_idx = headers.index("LOC_Y")
+                shot_made_idx = headers.index("SHOT_MADE_FLAG")
+                shot_type_idx = headers.index("ACTION_TYPE")
+                shot_distance_idx = headers.index("SHOT_DISTANCE")
+                event_type_idx = headers.index("EVENT_TYPE")
+                game_date_idx = headers.index("GAME_DATE")
+            except ValueError as e:
+                logger.error(f"Missing expected column in shot chart data: {e}")
+                return [TextContent(type="text", text="Error parsing shot chart data structure.")]
+
+            # Aggregate stats
+            total_shots = len(shots)
+            made_shots = sum(1 for shot in shots if safe_get(shot, shot_made_idx) == 1)
+            missed_shots = total_shots - made_shots
+            fg_pct = (made_shots / total_shots * 100) if total_shots > 0 else 0
+
+            # Group by distance ranges
+            distance_buckets = {
+                "0-5 ft": [],
+                "5-10 ft": [],
+                "10-15 ft": [],
+                "15-20 ft": [],
+                "20-25 ft": [],
+                "25+ ft": []
+            }
+
+            for shot in shots:
+                distance = safe_get(shot, shot_distance_idx, default=0)
+                made = safe_get(shot, shot_made_idx) == 1
+
+                if distance < 5:
+                    distance_buckets["0-5 ft"].append(made)
+                elif distance < 10:
+                    distance_buckets["5-10 ft"].append(made)
+                elif distance < 15:
+                    distance_buckets["10-15 ft"].append(made)
+                elif distance < 20:
+                    distance_buckets["15-20 ft"].append(made)
+                elif distance < 25:
+                    distance_buckets["20-25 ft"].append(made)
+                else:
+                    distance_buckets["25+ ft"].append(made)
+
+            result = f"Shot Chart - {player_name} ({season})\n\n"
+            result += f"Overall Shooting:\n"
+            result += f"  Total Shots: {total_shots}\n"
+            result += f"  Made: {made_shots}\n"
+            result += f"  Missed: {missed_shots}\n"
+            result += f"  FG%: {fg_pct:.1f}%\n\n"
+
+            result += "Shooting by Distance:\n"
+            for distance_range, shots_list in distance_buckets.items():
+                if shots_list:
+                    made = sum(shots_list)
+                    total = len(shots_list)
+                    pct = (made / total * 100) if total > 0 else 0
+                    result += f"  {distance_range}: {made}/{total} ({pct:.1f}%)\n"
+
+            # Show shot type breakdown (top 5)
+            shot_types = {}
+            for shot in shots:
+                shot_type = safe_get(shot, shot_type_idx, default="Unknown")
+                made = safe_get(shot, shot_made_idx) == 1
+                if shot_type not in shot_types:
+                    shot_types[shot_type] = {"made": 0, "total": 0}
+                shot_types[shot_type]["total"] += 1
+                if made:
+                    shot_types[shot_type]["made"] += 1
+
+            # Sort by total attempts
+            sorted_types = sorted(shot_types.items(), key=lambda x: x[1]["total"], reverse=True)[:5]
+
+            if sorted_types:
+                result += "\nTop Shot Types:\n"
+                for shot_type, stats in sorted_types:
+                    pct = (stats["made"] / stats["total"] * 100) if stats["total"] > 0 else 0
+                    result += f"  {shot_type}: {stats['made']}/{stats['total']} ({pct:.1f}%)\n"
+
+            result += f"\nNote: Shot chart contains {total_shots} total shot attempts with X/Y coordinates for visualization."
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_shooting_splits":
+            player_id = arguments.get("player_id")
+            season = arguments.get("season", get_current_season())
+
+            # Build parameters for shooting splits endpoint
+            params = {
+                "PlayerID": player_id,
+                "Season": season,
+                "SeasonType": "Regular Season",
+                "PerMode": "Totals",
+                "MeasureType": "Base",
+                "PlusMinus": "N",
+                "PaceAdjust": "N",
+                "Rank": "N",
+                "Outcome": "",
+                "Location": "",
+                "Month": "0",
+                "SeasonSegment": "",
+                "DateFrom": "",
+                "DateTo": "",
+                "OpponentTeamID": "0",
+                "VsConference": "",
+                "VsDivision": "",
+                "GameSegment": "",
+                "Period": "0",
+                "LastNGames": "0",
+            }
+
+            url = f"{NBA_STATS_API}/playerdashboardbyshootingsplits"
+            data = await fetch_nba_data(url, params=params)
+
+            if not data:
+                return [TextContent(type="text", text="Failed to fetch shooting splits data. The NBA API may be unavailable.")]
+
+            # Find the shooting splits result set
+            # Look for "Shot5FTDistanceRange", "Shot8FTDistanceRange", or "ShotAreaOverall"
+            result_sets = safe_get(data, "resultSets", default=[])
+
+            # Try to find different result sets
+            overall_data = None
+            area_data = None
+            distance_data = None
+
+            for rs in result_sets:
+                rs_name = safe_get(rs, "name", default="")
+                if rs_name == "OverallPlayerDashboard":
+                    overall_data = rs
+                elif rs_name == "Shot5FTDistanceRange":
+                    distance_data = rs
+                elif rs_name == "ShotAreaOverall":
+                    area_data = rs
+
+            if not overall_data:
+                return [TextContent(type="text", text=f"No shooting data found for this player in {season} season.")]
+
+            # Get overall stats first
+            headers = safe_get(overall_data, "headers", default=[])
+            rows = safe_get(overall_data, "rowSet", default=[])
+
+            if not rows:
+                return [TextContent(type="text", text=f"No shooting data available for {season} season.")]
+
+            player_name = safe_get(rows, 0, 1, default="Player")
+
+            result = f"Shooting Splits - {player_name} ({season})\n\n"
+
+            # Process distance data if available
+            if distance_data:
+                dist_headers = safe_get(distance_data, "headers", default=[])
+                dist_rows = safe_get(distance_data, "rowSet", default=[])
+
+                if dist_rows:
+                    result += "Shooting by Distance:\n"
+                    try:
+                        fg_pct_idx = dist_headers.index("FG_PCT")
+                        fga_idx = dist_headers.index("FGA")
+                        fgm_idx = dist_headers.index("FGM")
+                        group_value_idx = dist_headers.index("GROUP_VALUE")
+                    except ValueError:
+                        result += "  (Distance data structure not recognized)\n"
+                    else:
+                        for row in dist_rows:
+                            distance_range = safe_get(row, group_value_idx, default="Unknown")
+                            fgm = safe_get(row, fgm_idx, default=0)
+                            fga = safe_get(row, fga_idx, default=0)
+                            fg_pct = safe_get(row, fg_pct_idx, default=0)
+                            if fga > 0:
+                                result += f"  {distance_range}: {fgm}/{fga} ({format_stat(fg_pct, is_percentage=True)})\n"
+                    result += "\n"
+
+            # Process area data if available (paint, mid-range, 3PT, etc.)
+            if area_data:
+                area_headers = safe_get(area_data, "headers", default=[])
+                area_rows = safe_get(area_data, "rowSet", default=[])
+
+                if area_rows:
+                    result += "Shooting by Area:\n"
+                    try:
+                        fg_pct_idx = area_headers.index("FG_PCT")
+                        fga_idx = area_headers.index("FGA")
+                        fgm_idx = area_headers.index("FGM")
+                        group_value_idx = area_headers.index("GROUP_VALUE")
+                    except ValueError:
+                        result += "  (Area data structure not recognized)\n"
+                    else:
+                        for row in area_rows:
+                            area = safe_get(row, group_value_idx, default="Unknown")
+                            fgm = safe_get(row, fgm_idx, default=0)
+                            fga = safe_get(row, fga_idx, default=0)
+                            fg_pct = safe_get(row, fg_pct_idx, default=0)
+                            if fga > 0:
+                                result += f"  {area}: {fgm}/{fga} ({format_stat(fg_pct, is_percentage=True)})\n"
+                    result += "\n"
+
+            # Add overall stats
+            try:
+                fgm_idx = headers.index("FGM")
+                fga_idx = headers.index("FGA")
+                fg_pct_idx = headers.index("FG_PCT")
+                fg3m_idx = headers.index("FG3M")
+                fg3a_idx = headers.index("FG3A")
+                fg3_pct_idx = headers.index("FG3_PCT")
+                fg2m_idx = headers.index("FGM") - safe_get(rows, 0, headers.index("FG3M"), default=0) if "FG3M" in headers else 0
+                fg2a_idx = headers.index("FGA") - safe_get(rows, 0, headers.index("FG3A"), default=0) if "FG3A" in headers else 0
+
+                row = rows[0]
+                fgm = safe_get(row, fgm_idx, default=0)
+                fga = safe_get(row, fga_idx, default=0)
+                fg_pct = safe_get(row, fg_pct_idx, default=0)
+                fg3m = safe_get(row, fg3m_idx, default=0)
+                fg3a = safe_get(row, fg3a_idx, default=0)
+                fg3_pct = safe_get(row, fg3_pct_idx, default=0)
+
+                # Calculate 2PT stats
+                fg2m = fgm - fg3m
+                fg2a = fga - fg3a
+                fg2_pct = (fg2m / fg2a) if fg2a > 0 else 0
+
+                result += "Overall Shooting:\n"
+                result += f"  Total FG: {fgm}/{fga} ({format_stat(fg_pct, is_percentage=True)})\n"
+                result += f"  2-Point FG: {fg2m}/{fg2a} ({format_stat(fg2_pct, is_percentage=True)})\n"
+                result += f"  3-Point FG: {fg3m}/{fg3a} ({format_stat(fg3_pct, is_percentage=True)})\n"
+
+            except (ValueError, IndexError) as e:
+                logger.error(f"Error parsing overall shooting stats: {e}")
+                result += "Overall stats not available\n"
 
             return [TextContent(type="text", text=result)]
 
