@@ -269,20 +269,21 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_schedule",
-            description="Get upcoming NBA games schedule. Can filter by team or date range.",
+            description="Get upcoming NBA games schedule for a specific team. Shows future games with dates, times, locations, and opponent info.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "team_id": {
                         "type": "string",
-                        "description": "Optional: Filter schedule for a specific team ID (use get_all_teams to find IDs)",
+                        "description": "Team ID to get schedule for (required - use get_all_teams to find IDs)",
                     },
                     "days_ahead": {
                         "type": "integer",
-                        "description": "Number of days ahead to fetch (default: 7, max: 30)",
+                        "description": "Number of days ahead to fetch (default: 7, max: 90)",
                         "default": 7
                     }
                 },
+                "required": ["team_id"],
             },
         ),
     ]
@@ -937,114 +938,100 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
 
         elif name == "get_schedule":
             team_id = arguments.get("team_id")
-            days_ahead = min(arguments.get("days_ahead", 7), 30)  # Cap at 30 days
+            days_ahead = min(arguments.get("days_ahead", 7), 90)  # Cap at 90 days
 
-            # Use NBA Stats API leaguegamefinder to get schedule
-            # Note: This API doesn't have perfect future schedule data, so we'll note limitations
-            season = get_current_season()
-
-            if team_id:
-                # Get schedule for specific team
-                url = f"{NBA_STATS_API}/leaguegamefinder"
-                params = {
-                    "LeagueID": "00",
-                    "Season": season,
-                    "SeasonType": "Regular Season",
-                    "TeamID": team_id,
-                    "DateFrom": "",
-                    "DateTo": ""
-                }
-            else:
-                # Get all games - note this might be large
+            if not team_id:
                 return [TextContent(type="text", text="Please specify a team_id to get schedule. Use get_all_teams to find team IDs. For today's games, use get_todays_scoreboard instead.")]
 
-            data = await fetch_nba_data(url, params)
+            # Use NBA CDN scheduleLeagueV2.json - contains full season schedule including future games
+            url = "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"
+            data = await fetch_nba_data(url)
 
             if not data:
-                return [TextContent(type="text", text="Error fetching schedule. The NBA Stats API might not have future game data available.")]
+                return [TextContent(type="text", text="Error fetching schedule. Please try again.")]
 
-            games_rows = safe_get(data, "resultSets", 0, "rowSet", default=[])
+            game_dates = safe_get(data, "leagueSchedule", "gameDates", default=[])
 
-            if not games_rows:
-                return [TextContent(type="text", text=f"No games found for this team. Note: The NBA Stats API may not include future scheduled games. Try get_todays_scoreboard for current games.")]
+            if not game_dates:
+                return [TextContent(type="text", text="No schedule data available.")]
 
-            # Filter for upcoming games and sort by date
+            # Filter for games involving this team and within date range
             today = datetime.now()
+            team_id_int = int(team_id)
             upcoming_games = []
 
-            for game in games_rows:
-                game_date_str = safe_get(game, 0, default="")  # GAME_DATE
-                try:
-                    game_date = datetime.strptime(game_date_str, "%Y-%m-%dT%H:%M:%S")
+            for date_entry in game_dates:
+                for game in safe_get(date_entry, "games", default=[]):
+                    home_id = safe_get(game, "homeTeam", "teamId")
+                    away_id = safe_get(game, "awayTeam", "teamId")
 
-                    # Only include games from today onwards and within days_ahead
-                    if game_date.date() >= today.date():
-                        days_until = (game_date.date() - today.date()).days
-                        if days_until <= days_ahead:
-                            upcoming_games.append({
-                                "date": game_date,
-                                "game": game
-                            })
-                except (ValueError, TypeError):
-                    continue
+                    # Check if this team is playing
+                    if home_id == team_id_int or away_id == team_id_int:
+                        try:
+                            game_date_str = safe_get(game, "gameDateTimeEst")
+                            if game_date_str == "N/A":
+                                continue
+
+                            game_date = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
+
+                            # Only include future games within days_ahead
+                            if game_date.date() >= today.date():
+                                days_until = (game_date.date() - today.date()).days
+                                if days_until <= days_ahead:
+                                    upcoming_games.append({
+                                        "date": game_date,
+                                        "game": game
+                                    })
+                        except (ValueError, TypeError, AttributeError):
+                            continue
 
             # Sort by date
             upcoming_games.sort(key=lambda x: x["date"])
 
             if not upcoming_games:
-                # Fallback: Show recent games as reference
-                result = f"No upcoming games found in NBA Stats API.\n\n"
-                result += "Note: The NBA Stats API primarily contains historical data.\n"
-                result += "For current and live games, use get_todays_scoreboard.\n\n"
-                result += "Recent games for this team:\n\n"
-
-                for game in games_rows[:5]:
-                    game_date_str = safe_get(game, 0, default="")
-                    matchup = safe_get(game, 6, default="")  # MATCHUP
-                    wl = safe_get(game, 7, default="")  # WL
-                    result += f"{game_date_str[:10]}: {matchup} ({wl})\n"
-
-                return [TextContent(type="text", text=result)]
+                return [TextContent(type="text", text=f"No upcoming games found within the next {days_ahead} days for this team.")]
 
             # Get team name
-            team_name = "Team"
-            if team_id:
-                teams_dict = {
-                    1610612737: "Atlanta Hawks", 1610612738: "Boston Celtics",
-                    1610612751: "Brooklyn Nets", 1610612766: "Charlotte Hornets",
-                    1610612741: "Chicago Bulls", 1610612739: "Cleveland Cavaliers",
-                    1610612742: "Dallas Mavericks", 1610612743: "Denver Nuggets",
-                    1610612765: "Detroit Pistons", 1610612744: "Golden State Warriors",
-                    1610612745: "Houston Rockets", 1610612754: "Indiana Pacers",
-                    1610612746: "LA Clippers", 1610612747: "Los Angeles Lakers",
-                    1610612763: "Memphis Grizzlies", 1610612748: "Miami Heat",
-                    1610612749: "Milwaukee Bucks", 1610612750: "Minnesota Timberwolves",
-                    1610612740: "New Orleans Pelicans", 1610612752: "New York Knicks",
-                    1610612760: "Oklahoma City Thunder", 1610612753: "Orlando Magic",
-                    1610612755: "Philadelphia 76ers", 1610612756: "Phoenix Suns",
-                    1610612757: "Portland Trail Blazers", 1610612758: "Sacramento Kings",
-                    1610612759: "San Antonio Spurs", 1610612761: "Toronto Raptors",
-                    1610612762: "Utah Jazz", 1610612764: "Washington Wizards",
-                }
-                team_name = teams_dict.get(int(team_id), f"Team {team_id}")
+            teams_dict = {
+                1610612737: "Atlanta Hawks", 1610612738: "Boston Celtics",
+                1610612751: "Brooklyn Nets", 1610612766: "Charlotte Hornets",
+                1610612741: "Chicago Bulls", 1610612739: "Cleveland Cavaliers",
+                1610612742: "Dallas Mavericks", 1610612743: "Denver Nuggets",
+                1610612765: "Detroit Pistons", 1610612744: "Golden State Warriors",
+                1610612745: "Houston Rockets", 1610612754: "Indiana Pacers",
+                1610612746: "LA Clippers", 1610612747: "Los Angeles Lakers",
+                1610612763: "Memphis Grizzlies", 1610612748: "Miami Heat",
+                1610612749: "Milwaukee Bucks", 1610612750: "Minnesota Timberwolves",
+                1610612740: "New Orleans Pelicans", 1610612752: "New York Knicks",
+                1610612760: "Oklahoma City Thunder", 1610612753: "Orlando Magic",
+                1610612755: "Philadelphia 76ers", 1610612756: "Phoenix Suns",
+                1610612757: "Portland Trail Blazers", 1610612758: "Sacramento Kings",
+                1610612759: "San Antonio Spurs", 1610612761: "Toronto Raptors",
+                1610612762: "Utah Jazz", 1610612764: "Washington Wizards",
+            }
+            team_name = teams_dict.get(team_id_int, f"Team {team_id}")
 
-            result = f"Upcoming Games for {team_name}:\n\n"
+            result = f"Upcoming Games for {team_name}:\n"
+            result += f"(Next {days_ahead} days)\n\n"
 
-            current_display_date = None
             for item in upcoming_games:
                 game_date = item["date"]
                 game = item["game"]
 
-                date_str = game_date.strftime("%Y-%m-%d")
+                home_team = safe_get(game, "homeTeam", default={})
+                away_team = safe_get(game, "awayTeam", default={})
 
-                # Add date header if new date
-                if date_str != current_display_date:
-                    result += f"\n{date_str}:\n"
-                    result += "-" * 40 + "\n"
-                    current_display_date = date_str
+                home_name = f"{safe_get(home_team, 'teamCity')} {safe_get(home_team, 'teamName')}"
+                away_name = f"{safe_get(away_team, 'teamCity')} {safe_get(away_team, 'teamName')}"
 
-                matchup = safe_get(game, 6, default="N/A")  # MATCHUP
-                result += f"  {matchup}\n"
+                arena = safe_get(game, "arenaName")
+                city = safe_get(game, "arenaCity")
+                state = safe_get(game, "arenaState")
+
+                result += f"{game_date.strftime('%A, %B %d, %Y')} at {game_date.strftime('%I:%M %p')} ET\n"
+                result += f"  {away_name} @ {home_name}\n"
+                result += f"  {arena}, {city}, {state}\n"
+                result += f"  Game ID: {safe_get(game, 'gameId')}\n\n"
 
             return [TextContent(type="text", text=result)]
 

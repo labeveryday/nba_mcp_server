@@ -1,6 +1,6 @@
 # NBA MCP Server
 
-A Model Context Protocol (MCP) server that provides access to comprehensive NBA statistics and data. This server allows Claude and other MCP clients to fetch player stats, game data, team information, and league-wide statistics.
+A Model Context Protocol (MCP) server that provides access to comprehensive NBA statistics and data. This server allows MCP clients to fetch player stats, game data, team information, and league-wide statistics.
 
 ## Features
 
@@ -23,7 +23,7 @@ A Model Context Protocol (MCP) server that provides access to comprehensive NBA 
 ### League Tools
 - **get_standings**: Get current NBA standings
 - **get_league_leaders**: Get statistical leaders (points, assists, rebounds, etc.)
-- **get_schedule**: Get recent/historical games for a team (Note: NBA APIs don't provide future schedule data)
+- **get_schedule**: Get upcoming games schedule for a team (supports future games up to 90 days ahead)
 
 ## Why Direct API Calls?
 
@@ -161,7 +161,8 @@ Once the server is running and connected to your MCP client, you can ask questio
 - "Who are the top 10 scorers this season?"
 - "Show me all NBA teams"
 - "Get the roster for the Lakers"
-- "Show me recent Lakers games" (historical data only)
+- "When do the Lakers play next?"
+- "Show me the Grizzlies schedule for the next 30 days"
 
 ## Tool Reference
 
@@ -296,31 +297,32 @@ season: "2023-24"
 ```
 
 ### get_schedule
-Get recent/historical games for a specific team.
-
-**Important Note:** NBA's public APIs do not provide future schedule data. This tool shows historical games only. For today's games, use `get_todays_scoreboard`.
+Get upcoming games schedule for a specific team.
 
 **Parameters:**
 - `team_id` (string, required): Team ID to get games for (use get_all_teams to find IDs)
-- `days_ahead` (integer, optional): Attempted lookback range (default: 7, max: 30)
+- `days_ahead` (integer, optional): Number of days to look ahead (default: 7, max: 90)
 
 **Examples:**
 ```
-# Get recent Wizards games
+# Get next 30 days of Wizards games
 team_id: "1610612764"
-days_ahead: 7
+days_ahead: 30
 ```
 
 **Returns:**
-- Recent games for the specified team
-- Game matchups and results
-- Note if no upcoming games are found in the API
+- Upcoming games for the specified team
+- Game dates, times (ET), and locations
+- Opponent information
+- Arena details (name, city, state)
+- Game IDs for use with other tools
 
 ## Data Sources
 
 This server uses direct HTTP calls to official NBA APIs:
 
 - **Live Data API**: `https://cdn.nba.com/static/json/liveData` - For live scores and game data
+- **Schedule API**: `https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json` - For full season schedule with future games
 - **Stats API**: `https://stats.nba.com/stats` - For player stats, team info, standings, and historical data
 
 ### Why These APIs?
@@ -332,7 +334,6 @@ This server uses direct HTTP calls to official NBA APIs:
 
 ## Known Limitations
 
-- **Future Schedule**: NBA's public APIs don't provide future game schedules. Only current/historical games are available.
 - **Box Score Timing**: Detailed player stats may take a few minutes to appear after a game ends.
 - **Rate Limiting**: The NBA APIs may rate limit requests. The server handles errors gracefully.
 
