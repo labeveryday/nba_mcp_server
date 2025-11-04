@@ -22,7 +22,8 @@ A Model Context Protocol (MCP) server that provides access to comprehensive NBA 
 
 ### League Tools
 - **get_standings**: Get current NBA standings
-- **get_league_leaders**: Get statistical leaders (points, assists, rebounds, etc.)
+- **get_league_leaders**: Get statistical leaders for current season (points, assists, rebounds, etc.)
+- **get_all_time_leaders**: Get all-time career leaders across NBA history (points, rebounds, assists, steals, blocks, etc.)
 - **get_schedule**: Get upcoming games schedule for a team (supports future games up to 90 days ahead)
 
 ### Advanced Stats Tools
@@ -164,6 +165,8 @@ Once the server is running and connected to your MCP client, you can ask questio
 - "What are Stephen Curry's stats for this season?"
 - "Get the current NBA standings"
 - "Who are the top 10 scorers this season?"
+- "Who are the top 5 scorers of all time?"
+- "Show me the all-time assists leaders"
 - "Show me all NBA teams"
 - "Get the roster for the Lakers"
 - "When do the Lakers play next?"
@@ -304,6 +307,29 @@ Get statistical leaders across the league.
 stat_category: "PTS"
 season: "2023-24"
 ```
+
+### get_all_time_leaders
+Get all-time career leaders across NBA history for any stat category.
+
+**Parameters:**
+- `stat_category` (string, optional): Stat category to rank. Options: 'points', 'rebounds', 'assists', 'steals', 'blocks', 'games', 'offensive_rebounds', 'defensive_rebounds', 'field_goals_made', 'field_goal_pct', 'three_pointers_made', 'three_point_pct', 'free_throws_made', 'free_throw_pct', 'turnovers', 'personal_fouls'. Defaults to 'points'.
+- `limit` (integer, optional): Number of leaders to return (default: 10, max: 50)
+
+**Examples:**
+```
+# Get top 10 all-time scoring leaders
+stat_category: "points"
+limit: 10
+
+# Get top 5 all-time assist leaders
+stat_category: "assists"
+limit: 5
+```
+
+**Returns:**
+- Ranked list of all-time leaders
+- Player names and career totals
+- Active player indicator (✓)
 
 ### get_schedule
 Get upcoming games schedule for a specific team.

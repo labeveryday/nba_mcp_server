@@ -283,6 +283,25 @@ async def list_tools() -> list[Tool]:
                 "required": ["player_id"],
             },
         ),
+        Tool(
+            name="get_all_time_leaders",
+            description="Get all-time career leaders across NBA history for any stat category (points, rebounds, assists, etc.).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "stat_category": {
+                        "type": "string",
+                        "description": "Stat category: 'points', 'rebounds', 'assists', 'steals', 'blocks', 'games', 'minutes'. Defaults to 'points'.",
+                        "default": "points"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Number of leaders to return (default: 10, max: 50)",
+                        "default": 10
+                    }
+                },
+            },
+        ),
 
         # Team Tools
         Tool(
@@ -1244,6 +1263,90 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                     result += f"{format_stat(safe_get(player, -1))}"
 
                 result += f" | GP: {safe_get(player, 5)}\n"  # GP
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_all_time_leaders":
+            stat_category = arguments.get("stat_category", "points").lower()
+            limit = min(arguments.get("limit", 10), 50)
+
+            # Map stat categories to result set names
+            stat_map = {
+                "points": "PTSLeaders",
+                "rebounds": "REBLeaders",
+                "assists": "ASTLeaders",
+                "steals": "STLLeaders",
+                "blocks": "BLKLeaders",
+                "games": "GPLeaders",
+                "offensive_rebounds": "OREBLeaders",
+                "defensive_rebounds": "DREBLeaders",
+                "field_goals_made": "FGMLeaders",
+                "field_goals_attempted": "FGALeaders",
+                "field_goal_pct": "FG_PCTLeaders",
+                "three_pointers_made": "FG3MLeaders",
+                "three_pointers_attempted": "FG3ALeaders",
+                "three_point_pct": "FG3_PCTLeaders",
+                "free_throws_made": "FTMLeaders",
+                "free_throws_attempted": "FTALeaders",
+                "free_throw_pct": "FT_PCTLeaders",
+                "turnovers": "TOVLeaders",
+                "personal_fouls": "PFLeaders"
+            }
+
+            if stat_category not in stat_map:
+                valid_cats = ", ".join(sorted(stat_map.keys()))
+                return [TextContent(type="text", text=f"Invalid stat category. Choose from: {valid_cats}")]
+
+            result_set_name = stat_map[stat_category]
+
+            url = f"{NBA_STATS_API}/alltimeleadersgrids"
+            params = {
+                "LeagueID": "00",
+                "PerMode": "Totals",
+                "SeasonType": "Regular Season",
+                "TopX": str(limit)
+            }
+
+            data = await fetch_nba_data(url, params)
+
+            if not data:
+                return [TextContent(type="text", text="Error fetching all-time leaders. Please try again.")]
+
+            # Find the correct result set
+            leaders_data = None
+            for result_set in safe_get(data, "resultSets", default=[]):
+                if result_set.get("name") == result_set_name:
+                    leaders_data = result_set.get("rowSet", [])
+                    break
+
+            if not leaders_data:
+                return [TextContent(type="text", text=f"No all-time leaders found for {stat_category}.")]
+
+            # Format stat category name nicely
+            stat_display = stat_category.replace("_", " ").title()
+
+            result = f"All-Time Career Leaders - {stat_display}:\n\n"
+
+            for i, player in enumerate(leaders_data, 1):
+                player_name = safe_get(player, 1, default="Unknown")
+                stat_value = safe_get(player, 2, default=0)
+                is_active = safe_get(player, 4, default=0)
+
+                # Format the stat value
+                if "pct" in stat_category:
+                    stat_str = format_stat(stat_value, is_percentage=True)
+                else:
+                    # Add thousands separator for large numbers
+                    try:
+                        stat_str = f"{int(float(stat_value)):,}"
+                    except (ValueError, TypeError):
+                        stat_str = str(stat_value)
+
+                active_marker = " ✓" if is_active == 1 else ""
+                result += f"{i}. {player_name}: {stat_str}{active_marker}\n"
+
+            if any(safe_get(p, 4, default=0) == 1 for p in leaders_data):
+                result += "\n✓ = Active player"
 
             return [TextContent(type="text", text=result)]
 
