@@ -1233,12 +1233,15 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
 
             stat_category = stat_map.get(stat_type, "PTS")
 
-            url = f"{NBA_STATS_API}/leagueleaders"
+            # Use leaguegamelog endpoint which is more reliable
+            url = f"{NBA_STATS_API}/leaguegamelog"
             params = {
                 "LeagueID": "00",
                 "Season": season,
                 "SeasonType": "Regular Season",
-                "StatCategory": stat_category
+                "PlayerOrTeam": "P",
+                "Sorter": stat_category,
+                "Direction": "DESC"
             }
 
             data = await fetch_nba_data(url, params)
@@ -1246,23 +1249,74 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             if not data:
                 return [TextContent(type="text", text="Error fetching league leaders. Please try again.")]
 
-            leaders_data = safe_get(data, "resultSets", 0, "rowSet", default=[])
+            # Parse game log data
+            headers = safe_get(data, "resultSets", 0, "headers", default=[])
+            rows = safe_get(data, "resultSets", 0, "rowSet", default=[])
 
-            if not leaders_data:
-                return [TextContent(type="text", text=f"No leaders found for {stat_type}.")]
+            if not rows or not headers:
+                return [TextContent(type="text", text=f"No data found for {stat_type} leaders.")]
 
+            # Find column indices
+            player_id_idx = headers.index("PLAYER_ID") if "PLAYER_ID" in headers else 1
+            player_name_idx = headers.index("PLAYER_NAME") if "PLAYER_NAME" in headers else 2
+            team_idx = headers.index("TEAM_ABBREVIATION") if "TEAM_ABBREVIATION" in headers else 4
+            stat_idx = headers.index(stat_category) if stat_category in headers else -1
+
+            if stat_idx == -1:
+                return [TextContent(type="text", text=f"Stat category {stat_type} not found in data.")]
+
+            # Aggregate stats by player
+            player_stats = {}
+            for row in rows:
+                player_id = safe_get(row, player_id_idx)
+                player_name = safe_get(row, player_name_idx)
+                team = safe_get(row, team_idx)
+                stat_value = safe_get(row, stat_idx, default=0)
+
+                if player_id not in player_stats:
+                    player_stats[player_id] = {
+                        "name": player_name,
+                        "team": team,
+                        "total": 0,
+                        "games": 0
+                    }
+
+                # Add to total
+                try:
+                    player_stats[player_id]["total"] += float(stat_value) if stat_value else 0
+                    player_stats[player_id]["games"] += 1
+                except (ValueError, TypeError):
+                    pass
+
+            # Calculate averages and sort
+            player_list = []
+            for pid, stats in player_stats.items():
+                if stats["games"] > 0:
+                    avg = stats["total"] / stats["games"]
+                    player_list.append({
+                        "name": stats["name"],
+                        "team": stats["team"],
+                        "total": stats["total"],
+                        "avg": avg,
+                        "games": stats["games"]
+                    })
+
+            # Sort by average (per game)
+            player_list.sort(key=lambda x: x["avg"], reverse=True)
+
+            # Format result
             result = f"League Leaders - {stat_type} ({season}):\n\n"
 
-            for i, player in enumerate(leaders_data[:10], 1):  # Top 10
-                result += f"{i}. {safe_get(player, 2)} ({safe_get(player, 4)}): "  # PLAYER, TEAM
+            for i, player in enumerate(player_list[:10], 1):  # Top 10
+                result += f"{i}. {player['name']} ({player['team']}): "
 
-                # Find the stat value (varies by position in array)
+                # Show average per game
                 if stat_category in ["FG_PCT", "FG3_PCT", "FT_PCT"]:
-                    result += f"{format_stat(safe_get(player, -1), True)}"
+                    result += f"{format_stat(player['avg'], True)}"
                 else:
-                    result += f"{format_stat(safe_get(player, -1))}"
+                    result += f"{player['avg']:.1f}"
 
-                result += f" | GP: {safe_get(player, 5)}\n"  # GP
+                result += f" | GP: {player['games']}\n"
 
             return [TextContent(type="text", text=result)]
 
