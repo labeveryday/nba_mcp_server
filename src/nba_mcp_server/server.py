@@ -469,6 +469,44 @@ async def list_tools() -> list[Tool]:
                 "required": ["player_id"],
             },
         ),
+
+        # Play-by-Play & Rotation Tools
+        Tool(
+            name="get_play_by_play",
+            description="Get detailed play-by-play data for a game including every action, timestamp, score changes, and descriptions. Shows the complete game narrative.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "game_id": {
+                        "type": "string",
+                        "description": "NBA game ID (10 digits, e.g., '0022400123')",
+                    },
+                    "start_period": {
+                        "type": "integer",
+                        "description": "Starting period/quarter (default: 1)",
+                    },
+                    "end_period": {
+                        "type": "integer",
+                        "description": "Ending period/quarter (default: 10 for overtime games)",
+                    }
+                },
+                "required": ["game_id"],
+            },
+        ),
+        Tool(
+            name="get_game_rotation",
+            description="Get player rotation and substitution patterns for a game. Shows when players entered/exited, minutes played, and performance during their time on court.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "game_id": {
+                        "type": "string",
+                        "description": "NBA game ID (10 digits, e.g., '0022400123')",
+                    }
+                },
+                "required": ["game_id"],
+            },
+        ),
     ]
 
 
@@ -2115,6 +2153,198 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             except (ValueError, IndexError) as e:
                 logger.error(f"Error parsing overall shooting stats: {e}")
                 result += "Overall stats not available\n"
+
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_play_by_play":
+            game_id = arguments.get("game_id")
+            start_period = arguments.get("start_period", 1)
+            end_period = arguments.get("end_period", 10)
+
+            # Build parameters for playbyplayv2 endpoint
+            params = {
+                "GameID": game_id,
+                "StartPeriod": start_period,
+                "EndPeriod": end_period,
+            }
+
+            url = f"{NBA_STATS_API}/playbyplayv2"
+            data = await fetch_nba_data(url, params=params)
+
+            if not data:
+                return [TextContent(type="text", text="Failed to fetch play-by-play data. The NBA API may be unavailable or the game ID may be invalid.")]
+
+            # Extract play-by-play data
+            result_sets = safe_get(data, "resultSets", default=[])
+
+            # Find the PlayByPlay result set
+            play_by_play_data = None
+            for rs in result_sets:
+                if safe_get(rs, "name") == "PlayByPlay":
+                    play_by_play_data = rs
+                    break
+
+            if not play_by_play_data:
+                return [TextContent(type="text", text=f"No play-by-play data found for game {game_id}.")]
+
+            headers = safe_get(play_by_play_data, "headers", default=[])
+            plays = safe_get(play_by_play_data, "rowSet", default=[])
+
+            if not plays:
+                return [TextContent(type="text", text=f"No plays found for game {game_id}.")]
+
+            # Find relevant column indices
+            try:
+                period_idx = headers.index("PERIOD")
+                pctimestring_idx = headers.index("PCTIMESTRING")
+                homedescription_idx = headers.index("HOMEDESCRIPTION")
+                visitordescription_idx = headers.index("VISITORDESCRIPTION")
+                score_idx = headers.index("SCORE")
+                scoremargin_idx = headers.index("SCOREMARGIN")
+            except ValueError as e:
+                logger.error(f"Missing expected column in play-by-play data: {e}")
+                return [TextContent(type="text", text="Error parsing play-by-play data structure.")]
+
+            result = f"Play-by-Play - Game {game_id}\n"
+            result += f"Showing periods {start_period} to {end_period}\n"
+            result += "=" * 70 + "\n\n"
+
+            current_period = None
+            play_count = 0
+            max_plays = 100  # Limit output to avoid overwhelming response
+
+            for play in plays:
+                period = safe_get(play, period_idx, default=0)
+                time = safe_get(play, pctimestring_idx, default="")
+                home_desc = safe_get(play, homedescription_idx, default="")
+                visitor_desc = safe_get(play, visitordescription_idx, default="")
+                score = safe_get(play, score_idx, default="")
+                margin = safe_get(play, scoremargin_idx, default="")
+
+                # Add period header when period changes
+                if period != current_period:
+                    current_period = period
+                    period_name = f"Q{period}" if period <= 4 else f"OT{period - 4}"
+                    result += f"\n{'=' * 70}\n"
+                    result += f"{period_name}\n"
+                    result += f"{'=' * 70}\n\n"
+
+                # Determine which team's action to show
+                description = home_desc if home_desc else visitor_desc
+
+                if description:
+                    play_count += 1
+                    score_info = f" [{score}]" if score else ""
+                    margin_info = f" ({margin})" if margin and score else ""
+                    result += f"{time:>6} - {description}{score_info}{margin_info}\n"
+
+                    # Limit output
+                    if play_count >= max_plays:
+                        result += f"\n... (showing first {max_plays} plays)\n"
+                        result += f"Total plays in this range: {len(plays)}\n"
+                        break
+
+            result += f"\nTotal plays shown: {play_count}\n"
+            return [TextContent(type="text", text=result)]
+
+        elif name == "get_game_rotation":
+            game_id = arguments.get("game_id")
+
+            # Build parameters for gamerotation endpoint
+            params = {
+                "GameID": game_id,
+                "LeagueID": "00",  # NBA league ID
+            }
+
+            url = f"{NBA_STATS_API}/gamerotation"
+            data = await fetch_nba_data(url, params=params)
+
+            if not data:
+                return [TextContent(type="text", text="Failed to fetch game rotation data. The NBA API may be unavailable or the game ID may be invalid.")]
+
+            # Extract rotation data - separate result sets for home and away
+            result_sets = safe_get(data, "resultSets", default=[])
+
+            away_team_data = None
+            home_team_data = None
+
+            for rs in result_sets:
+                rs_name = safe_get(rs, "name", default="")
+                if rs_name == "AwayTeam":
+                    away_team_data = rs
+                elif rs_name == "HomeTeam":
+                    home_team_data = rs
+
+            if not away_team_data and not home_team_data:
+                return [TextContent(type="text", text=f"No rotation data found for game {game_id}. The game may not have started yet.")]
+
+            result = f"Game Rotation - Game {game_id}\n"
+            result += "=" * 70 + "\n\n"
+
+            # Process each team's rotation data
+            for team_data, team_label in [(away_team_data, "Away Team"), (home_team_data, "Home Team")]:
+                if not team_data:
+                    continue
+
+                headers = safe_get(team_data, "headers", default=[])
+                rotations = safe_get(team_data, "rowSet", default=[])
+
+                if not rotations:
+                    continue
+
+                # Get team name from first row
+                team_name = safe_get(rotations, 0, headers.index("TEAM_NAME") if "TEAM_NAME" in headers else 4, default=team_label)
+
+                result += f"{team_name} Rotation:\n"
+                result += "-" * 70 + "\n"
+
+                try:
+                    player_first_idx = headers.index("PLAYER_FIRST")
+                    player_last_idx = headers.index("PLAYER_LAST")
+                    in_time_idx = headers.index("IN_TIME_REAL")
+                    out_time_idx = headers.index("OUT_TIME_REAL")
+                    player_pts_idx = headers.index("PLAYER_PTS")
+                    pt_diff_idx = headers.index("PT_DIFF")
+                    usg_pct_idx = headers.index("USG_PCT")
+                except ValueError as e:
+                    logger.error(f"Missing expected column in rotation data: {e}")
+                    result += "  (Rotation data structure not recognized)\n\n"
+                    continue
+
+                # Group rotations by player
+                player_rotations = {}
+                for rotation in rotations:
+                    first_name = safe_get(rotation, player_first_idx, default="")
+                    last_name = safe_get(rotation, player_last_idx, default="")
+                    player_name = f"{first_name} {last_name}"
+
+                    if player_name not in player_rotations:
+                        player_rotations[player_name] = []
+
+                    player_rotations[player_name].append({
+                        "in": safe_get(rotation, in_time_idx, default=""),
+                        "out": safe_get(rotation, out_time_idx, default=""),
+                        "pts": safe_get(rotation, player_pts_idx, default=0),
+                        "diff": safe_get(rotation, pt_diff_idx, default=0),
+                        "usg": safe_get(rotation, usg_pct_idx, default=0),
+                    })
+
+                # Display each player's rotations
+                for player_name, player_stints in player_rotations.items():
+                    result += f"\n  {player_name}:\n"
+                    for i, stint in enumerate(player_stints, 1):
+                        in_time = stint["in"]
+                        out_time = stint["out"]
+                        pts = stint["pts"]
+                        diff = stint["diff"]
+                        usg = stint["usg"]
+
+                        # Format time display
+                        time_display = f"In: {in_time}, Out: {out_time}" if out_time else f"In: {in_time}"
+                        result += f"    Stint {i}: {time_display}\n"
+                        result += f"      Points: {pts}, +/-: {diff:+}, Usage: {format_stat(usg, is_percentage=True)}\n"
+
+                result += "\n"
 
             return [TextContent(type="text", text=result)]
 

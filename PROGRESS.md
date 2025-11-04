@@ -1,7 +1,7 @@
 # NBA MCP Server - Endpoint Expansion Progress
 
 **Last Updated:** 2025-11-04
-**Status:** Phase 1 Complete ✅
+**Status:** Phase 2 Complete ✅
 
 ## Overview
 
@@ -45,29 +45,60 @@ This document tracks progress on the NBA MCP Server endpoint expansion project, 
 - ✅ Tool count updated from 20 to 22
 - ✅ Example queries added
 
+#### Phase 2: Play-by-Play & Rotations (2 endpoints)
+**Status:** Complete
+**Date Completed:** 2025-11-04
+
+**Endpoints Added:**
+1. **`get_play_by_play`** - Complete play-by-play data for games
+   - Endpoint: `https://stats.nba.com/stats/playbyplayv2`
+   - Returns: Every action with timestamps, scores, descriptions
+   - Features:
+     - Organized by quarter/period with headers
+     - Timestamps for each play
+     - Score tracking and margin calculations
+     - Home and visitor team descriptions
+     - Supports filtering by start/end period
+     - Limited to first 100 plays for performance
+
+2. **`get_game_rotation`** - Player substitution patterns and rotations
+   - Endpoint: `https://stats.nba.com/stats/gamerotation`
+   - Returns: When players entered/exited with performance metrics
+   - Features:
+     - Separate data for home and away teams
+     - In/out times for each player stint
+     - Points scored during stint
+     - Plus/minus differential
+     - Usage percentage per stint
+     - Grouped by player with multiple stints
+
+**Testing:**
+- ✅ 4 new unit tests added (2 per tool)
+- ✅ Test fixtures created for play-by-play and rotation data
+- ✅ All 37 tests passing (33 previous + 4 new)
+- ✅ Code coverage increased from 32% to 38%
+
+**Documentation:**
+- ✅ CLAUDE.md updated with new tool category
+- ✅ README.md updated with tool descriptions
+- ✅ Tool count updated from 22 to 24
+- ✅ Category count updated from 5 to 6
+
 ## Statistics
 
 ### Current Metrics
-- **Total Tools:** 22 (was 20)
-- **Total Categories:** 5 (was 4)
-- **Code Lines:** 2,149 (was 1,826)
-- **Test Count:** 33 (was 29)
-- **Code Coverage:** 32% (was 18%)
+- **Total Tools:** 24 (was 22)
+- **Total Categories:** 6 (was 5)
+- **Code Lines:** 2,372 (was 2,149)
+- **Test Count:** 37 (was 33)
+- **Code Coverage:** 38% (was 32%)
 
 ### Progress Tracking
-- **Phases Complete:** 1 / 10 (10%)
-- **Endpoints Added:** 2 / 19 (10.5%)
-- **Estimated Time Spent:** ~2 hours
+- **Phases Complete:** 2 / 10 (20%)
+- **Endpoints Added:** 4 / 19 (21%)
+- **Estimated Time Spent:** ~4 hours (2 per phase)
 
 ## Pending Work
-
-### Phase 2: Play-by-Play & Rotations (2 endpoints)
-**Status:** Not Started
-**Priority:** High Value, Moderate Complexity
-
-**Planned Endpoints:**
-1. `get_play_by_play` - Every play in a game with timestamps
-2. `get_game_rotation` - Player substitution patterns
 
 ### Phase 3: Advanced Stats (2 endpoints)
 **Status:** Not Started
@@ -169,27 +200,41 @@ This document tracks progress on the NBA MCP Server endpoint expansion project, 
 
 ### Estimated Remaining Work
 - **Total Time:** 14-19 hours (original estimate)
-- **Time Spent:** ~2 hours
-- **Time Remaining:** 12-17 hours
+- **Time Spent:** ~4 hours
+- **Time Remaining:** 10-15 hours
 
 ## Notes
 
-### What Went Well
+### What Went Well - Phase 1
 - Clean integration with existing codebase
 - Test-driven approach caught issues early
 - NBA API response structure matched expectations
 - Documentation updates straightforward
 
-### Challenges Encountered
+### What Went Well - Phase 2
+- Straightforward endpoint implementation following established patterns
+- WebSearch and WebFetch tools helped quickly identify correct NBA API endpoints
+- Test fixtures were easy to create by mimicking Phase 1 structure
+- All 37 tests passed on first run after implementation
+- Code coverage improved from 32% to 38%
+
+### Challenges Encountered - Phase 1
 - Player name extraction from shot chart data required adjustment
 - Test fixtures needed careful structure matching
 - Line number references in CLAUDE.md needed updates
 
+### Challenges Encountered - Phase 2
+- Play-by-play data can be very large (hundreds of plays per game) - implemented 100 play limit
+- Rotation data has complex structure with multiple stints per player - required grouping logic
+- Needed to handle both home and away team data separately
+
 ### Lessons Learned
-- NBA Stats API consistently uses `resultSets` array structure
+- NBA Stats API consistently uses `resultSets` array structure with "name" field to identify data sets
 - Mock data structure must precisely match real API responses
 - Test assertions should focus on data presence rather than exact values
 - Tool count updates needed in multiple places (test files, docs)
+- Large data responses benefit from pagination or limiting (first N items)
+- Grouping data by player/entity improves readability for multi-row data
 
 ## References
 

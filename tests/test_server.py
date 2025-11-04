@@ -178,11 +178,11 @@ class TestToolsListRegistration:
 
     @pytest.mark.asyncio
     async def test_list_tools_count(self):
-        """Test that all 22 tools are registered."""
+        """Test that all 24 tools are registered."""
         from nba_mcp_server.server import list_tools
 
         tools = await list_tools()
-        assert len(tools) == 22
+        assert len(tools) == 24
 
     @pytest.mark.asyncio
     async def test_list_tools_names(self):
@@ -215,6 +215,8 @@ class TestToolsListRegistration:
             "get_season_awards",
             "get_shot_chart",
             "get_shooting_splits",
+            "get_play_by_play",
+            "get_game_rotation",
         ]
 
         for expected in expected_tools:
@@ -315,3 +317,98 @@ class TestShotChartTools:
 
             assert len(result) == 1
             assert "No shooting data found" in result[0].text
+
+
+class TestPlayByPlayAndRotationTools:
+    """Test play-by-play and rotation tools."""
+
+    @pytest.mark.asyncio
+    async def test_get_play_by_play(self, mock_httpx_response, sample_play_by_play_data):
+        """Test get_play_by_play tool."""
+        from nba_mcp_server.server import call_tool
+
+        mock_response = mock_httpx_response(200, sample_play_by_play_data)
+
+        with patch('nba_mcp_server.server.http_client') as mock_client:
+            mock_client.get.return_value = mock_response
+            result = await call_tool("get_play_by_play", {
+                "game_id": "0022400123"
+            })
+
+            assert len(result) == 1
+            assert isinstance(result[0], TextContent)
+            assert "Play-by-Play" in result[0].text
+            assert "Game 0022400123" in result[0].text
+            assert "Q1" in result[0].text  # Verify quarter header
+            assert "Curry" in result[0].text  # Verify player names
+            assert "James" in result[0].text
+            assert "3 - 0" in result[0].text  # Verify score
+
+    @pytest.mark.asyncio
+    async def test_get_play_by_play_no_data(self, mock_httpx_response):
+        """Test get_play_by_play with no play data."""
+        from nba_mcp_server.server import call_tool
+
+        empty_data = {
+            "resultSets": [
+                {
+                    "name": "PlayByPlay",
+                    "headers": ["GAME_ID", "PERIOD", "PCTIMESTRING", "HOMEDESCRIPTION"],
+                    "rowSet": []
+                }
+            ]
+        }
+        mock_response = mock_httpx_response(200, empty_data)
+
+        with patch('nba_mcp_server.server.http_client') as mock_client:
+            mock_client.get.return_value = mock_response
+            result = await call_tool("get_play_by_play", {
+                "game_id": "0022400123"
+            })
+
+            assert len(result) == 1
+            assert "No plays found" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_get_game_rotation(self, mock_httpx_response, sample_game_rotation_data):
+        """Test get_game_rotation tool."""
+        from nba_mcp_server.server import call_tool
+
+        mock_response = mock_httpx_response(200, sample_game_rotation_data)
+
+        with patch('nba_mcp_server.server.http_client') as mock_client:
+            mock_client.get.return_value = mock_response
+            result = await call_tool("get_game_rotation", {
+                "game_id": "0022400123"
+            })
+
+            assert len(result) == 1
+            assert isinstance(result[0], TextContent)
+            assert "Game Rotation" in result[0].text
+            assert "Game 0022400123" in result[0].text
+            assert "Warriors" in result[0].text  # Verify team names
+            assert "Lakers" in result[0].text
+            assert "Stephen Curry" in result[0].text  # Verify player names
+            assert "LeBron James" in result[0].text
+            assert "In:" in result[0].text  # Verify time format
+            assert "Out:" in result[0].text
+            assert "+/-:" in result[0].text  # Verify stats
+
+    @pytest.mark.asyncio
+    async def test_get_game_rotation_no_data(self, mock_httpx_response):
+        """Test get_game_rotation with no rotation data."""
+        from nba_mcp_server.server import call_tool
+
+        empty_data = {
+            "resultSets": []
+        }
+        mock_response = mock_httpx_response(200, empty_data)
+
+        with patch('nba_mcp_server.server.http_client') as mock_client:
+            mock_client.get.return_value = mock_response
+            result = await call_tool("get_game_rotation", {
+                "game_id": "0022400123"
+            })
+
+            assert len(result) == 1
+            assert "No rotation data found" in result[0].text

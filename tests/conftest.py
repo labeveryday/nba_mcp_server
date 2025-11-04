@@ -171,3 +171,61 @@ def sample_shooting_splits_data():
             }
         ]
     }
+
+
+@pytest.fixture
+def sample_play_by_play_data():
+    """Sample play-by-play data from NBA API."""
+    return {
+        "resultSets": [
+            {
+                "name": "PlayByPlay",
+                "headers": ["GAME_ID", "EVENTNUM", "EVENTMSGTYPE", "EVENTMSGACTIONTYPE", "PERIOD", "WCTIMESTRING", "PCTIMESTRING", "HOMEDESCRIPTION", "NEUTRALDESCRIPTION", "VISITORDESCRIPTION", "SCORE", "SCOREMARGIN", "PERSON1TYPE", "PLAYER1_ID", "PLAYER1_NAME", "PLAYER1_TEAM_ID", "PLAYER1_TEAM_CITY", "PLAYER1_TEAM_NICKNAME", "PLAYER1_TEAM_ABBREVIATION", "PERSON2TYPE", "PLAYER2_ID", "PLAYER2_NAME", "PLAYER2_TEAM_ID", "PLAYER2_TEAM_CITY", "PLAYER2_TEAM_NICKNAME", "PLAYER2_TEAM_ABBREVIATION", "PERSON3TYPE", "PLAYER3_ID", "PLAYER3_NAME", "PLAYER3_TEAM_ID", "PLAYER3_TEAM_CITY", "PLAYER3_TEAM_NICKNAME", "PLAYER3_TEAM_ABBREVIATION", "VIDEO_AVAILABLE_FLAG"],
+                "rowSet": [
+                    ["0022400123", 1, 12, 0, 1, "7:00 PM", "12:00", None, "Period Start", None, None, None, 0, None, None, None, None, None, None, 0, None, None, None, None, None, None, 0, None, None, None, None, None, None, 1],
+                    ["0022400123", 2, 10, 0, 1, "7:00 PM", "11:47", None, "Jump Ball won by Lakers", None, None, None, 0, None, None, None, None, None, None, 0, None, None, None, None, None, None, 0, None, None, None, None, None, None, 1],
+                    ["0022400123", 3, 1, 1, 1, "7:01 PM", "11:30", None, None, "Curry 25' 3PT Jump Shot (3 PTS)", "3 - 0", "3", 4, 201939, "Stephen Curry", 1610612744, "Golden State", "Warriors", "GSW", 0, None, None, None, None, None, None, 0, None, None, None, None, None, None, 1],
+                    ["0022400123", 4, 2, 1, 1, "7:01 PM", "11:15", "James Missed Layup", None, None, "3 - 0", "3", 4, 2544, "LeBron James", 1610612747, "Los Angeles", "Lakers", "LAL", 0, None, None, None, None, None, None, 0, None, None, None, None, None, None, 1],
+                    ["0022400123", 5, 1, 1, 1, "7:02 PM", "10:58", "Davis Layup (2 PTS) (Assist: James)", None, None, "3 - 2", "1", 5, 203076, "Anthony Davis", 1610612747, "Los Angeles", "Lakers", "LAL", 0, 2544, "LeBron James", 1610612747, "Los Angeles", "Lakers", "LAL", 0, None, None, None, None, None, None, 1],
+                    ["0022400123", 6, 3, 0, 1, "7:02 PM", "10:45", None, None, "Thompson Defensive Rebound", None, None, 4, 202691, "Klay Thompson", 1610612744, "Golden State", "Warriors", "GSW", 0, None, None, None, None, None, None, 0, None, None, None, None, None, None, 1],
+                    ["0022400123", 7, 5, 0, 1, "7:03 PM", "10:30", None, "Turnover by Curry (Bad Pass)", None, "3 - 2", "1", 1, 201939, "Stephen Curry", 1610612744, "Golden State", "Warriors", "GSW", 0, None, None, None, None, None, None, 0, None, None, None, None, None, None, 1],
+                ]
+            },
+            {
+                "name": "AvailableVideo",
+                "headers": ["VIDEO_AVAILABLE_FLAG"],
+                "rowSet": [[1]]
+            }
+        ]
+    }
+
+
+@pytest.fixture
+def sample_game_rotation_data():
+    """Sample game rotation data from NBA API."""
+    return {
+        "resultSets": [
+            {
+                "name": "AwayTeam",
+                "headers": ["GAME_ID", "TEAM_ID", "TEAM_CITY", "TEAM_NAME", "PERSON_ID", "PLAYER_FIRST", "PLAYER_LAST", "IN_TIME_REAL", "OUT_TIME_REAL", "PLAYER_PTS", "PT_DIFF", "USG_PCT"],
+                "rowSet": [
+                    ["0022400123", 1610612744, "Golden State", "Warriors", 201939, "Stephen", "Curry", "12:00", "8:30", 8, 3, 0.28],
+                    ["0022400123", 1610612744, "Golden State", "Warriors", 201939, "Stephen", "Curry", "6:15", "0:00", 5, -2, 0.25],
+                    ["0022400123", 1610612744, "Golden State", "Warriors", 202691, "Klay", "Thompson", "12:00", "7:45", 6, 2, 0.22],
+                    ["0022400123", 1610612744, "Golden State", "Warriors", 202691, "Klay", "Thompson", "5:30", "0:00", 4, 0, 0.20],
+                    ["0022400123", 1610612744, "Golden State", "Warriors", 203110, "Draymond", "Green", "12:00", "9:00", 2, 1, 0.15],
+                ]
+            },
+            {
+                "name": "HomeTeam",
+                "headers": ["GAME_ID", "TEAM_ID", "TEAM_CITY", "TEAM_NAME", "PERSON_ID", "PLAYER_FIRST", "PLAYER_LAST", "IN_TIME_REAL", "OUT_TIME_REAL", "PLAYER_PTS", "PT_DIFF", "USG_PCT"],
+                "rowSet": [
+                    ["0022400123", 1610612747, "Los Angeles", "Lakers", 2544, "LeBron", "James", "12:00", "7:30", 10, 5, 0.32],
+                    ["0022400123", 1610612747, "Los Angeles", "Lakers", 2544, "LeBron", "James", "4:00", "0:00", 7, 3, 0.30],
+                    ["0022400123", 1610612747, "Los Angeles", "Lakers", 203076, "Anthony", "Davis", "12:00", "8:00", 8, 4, 0.28],
+                    ["0022400123", 1610612747, "Los Angeles", "Lakers", 203076, "Anthony", "Davis", "5:00", "0:00", 6, 2, 0.26],
+                    ["0022400123", 1610612747, "Los Angeles", "Lakers", 1628398, "Austin", "Reaves", "12:00", "10:00", 4, 1, 0.18],
+                ]
+            }
+        ]
+    }

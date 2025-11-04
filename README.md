@@ -42,6 +42,10 @@ A Model Context Protocol (MCP) server that provides access to comprehensive NBA 
 - **get_shot_chart**: Get shot chart data with X/Y coordinates for every shot attempt, showing shooting patterns by distance and shot type
 - **get_shooting_splits**: Get detailed shooting percentages by zone (restricted area, paint, mid-range, corner 3, above the break 3) and distance ranges
 
+### Play-by-Play & Rotation Tools
+- **get_play_by_play**: Get complete play-by-play data for a game with timestamps, scores, and descriptions for every action
+- **get_game_rotation**: Get player substitution patterns showing when players entered/exited and their performance during each stint
+
 ## Why Direct API Calls?
 
 This server uses **direct HTTP calls** to NBA APIs instead of third-party wrappers like `nba_api`. This approach provides:
