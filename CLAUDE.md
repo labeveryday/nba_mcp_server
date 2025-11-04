@@ -8,7 +8,7 @@ This is an **NBA MCP (Model Context Protocol) Server** that provides access to c
 
 **Key Design Decision**: This project uses **direct HTTP calls** to NBA APIs instead of third-party wrappers like `nba_api` for better reliability, control, easier debugging, and to stay always up-to-date with NBA's API structure.
 
-**Architecture**: Single-file implementation (`src/nba_server.py`) containing all server logic, tool handlers, and utilities (~1474 lines).
+**Architecture**: Single-module implementation (`src/nba_mcp_server/server.py`) containing all server logic, tool handlers, and utilities (~1528 lines).
 
 ## Development Commands
 
@@ -16,11 +16,14 @@ This is an **NBA MCP (Model Context Protocol) Server** that provides access to c
 
 ```bash
 # With uv (recommended - fast package manager)
-uv run python src/nba_server.py
+uv run nba-mcp-server
 
 # With activated virtualenv
 source .venv/bin/activate  # Always use .venv
-python src/nba_server.py
+nba-mcp-server
+
+# Or run directly with Python
+python -m nba_mcp_server
 ```
 
 ### Setting Up Development Environment
@@ -45,7 +48,7 @@ The server is designed to be used with MCP clients like Claude Desktop or Strand
   "mcpServers": {
     "nba-stats": {
       "command": "uv",
-      "args": ["--directory", "/absolute/path/to/nba_mcp_server/src/", "run", "nba_server.py"]
+      "args": ["--directory", "/absolute/path/to/nba_mcp_server/", "run", "nba-mcp-server"]
     }
   }
 }
@@ -59,7 +62,7 @@ from strands.tools.mcp import MCPClient
 mcp_client = MCPClient(lambda: stdio_client(
     StdioServerParameters(
         command="uv",
-        args=["--directory", "/path/to/nba_mcp_server/src/", "run", "nba_server.py"]
+        args=["--directory", "/path/to/nba_mcp_server/", "run", "nba-mcp-server"]
     )
 ))
 ```
@@ -68,11 +71,13 @@ mcp_client = MCPClient(lambda: stdio_client(
 
 ### Core Components
 
-1. **nba_server.py** - Single-file MCP server implementation containing:
-   - Server initialization and tool registration
-   - Tool handlers for all NBA data operations
-   - HTTP client setup with proper headers
-   - Error handling and data parsing utilities
+1. **src/nba_mcp_server/** - Python package containing:
+   - **server.py** - Main MCP server implementation with:
+     - Server initialization and tool registration
+     - Tool handlers for all NBA data operations
+     - HTTP client setup with proper headers
+     - Error handling and data parsing utilities
+   - **__init__.py** - Package initialization with version and exports
 
 2. **NBA API Endpoints**:
    - `https://cdn.nba.com/static/json/liveData` - Live game data, scoreboards, box scores
@@ -188,10 +193,11 @@ The server uses synchronous httpx client (`http_client` on line 45) within async
 
 ## Code Organization & Design Decisions
 
-### Single-File Design
-- The entire server is implemented in one file (`src/nba_server.py`) for simplicity
+### Single-Module Design
+- The entire server is implemented in one module (`src/nba_mcp_server/server.py`) for simplicity
 - No need to navigate multiple modules - all logic is in one place
-- ~1474 lines total including all tools, helpers, and server setup
+- ~1528 lines total including all tools, helpers, and server setup
+- Package structure follows Python best practices for PyPI distribution
 
 ### Hardcoded Team Data
 - Team IDs and names are hardcoded in two places:

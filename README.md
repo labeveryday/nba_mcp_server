@@ -89,7 +89,7 @@ from strands.tools.mcp import MCPClient
 mcp_client = MCPClient(lambda: stdio_client(
     StdioServerParameters(
         command="uv",
-        args=["--directory", "/path/to/nba_mcp_server/src/", "run", "nba_server.py"]
+        args=["--directory", "/path/to/nba_mcp_server/", "run", "nba-mcp-server"]
     )
 ))
 ```
@@ -99,8 +99,8 @@ Or with direct Python:
 ```python
 mcp_client = MCPClient(lambda: stdio_client(
     StdioServerParameters(
-        command="/path/to/nba_mcp_server/.venv/bin/python",
-        args=["/path/to/nba_mcp_server/src/nba_server.py"]
+        command="/path/to/nba_mcp_server/.venv/bin/nba-mcp-server",
+        args=[]
     )
 ))
 ```
@@ -120,8 +120,8 @@ Add this configuration to your Claude Desktop config file:
       "command": "uv",
       "args": [
         "--directory",
-        "/absolute/path/to/nba_mcp_server/src/",
-        "run", "nba_server.py"
+        "/absolute/path/to/nba_mcp_server/",
+        "run", "nba-mcp-server"
       ]
     }
   }
@@ -133,10 +133,8 @@ Add this configuration to your Claude Desktop config file:
 {
   "mcpServers": {
     "nba-stats": {
-      "command": "/absolute/path/to/nba_mcp_server/.venv/bin/python",
-      "args": [
-        "/absolute/path/to/nba_mcp_server/src/nba_server.py"
-      ]
+      "command": "/absolute/path/to/nba_mcp_server/.venv/bin/nba-mcp-server",
+      "args": []
     }
   }
 }
@@ -146,11 +144,14 @@ Add this configuration to your Claude Desktop config file:
 
 ```bash
 # With uv
-uv run python src/nba_server.py
+uv run nba-mcp-server
 
 # Or with activated virtualenv
 source .venv/bin/activate
-python src/nba_server.py
+nba-mcp-server
+
+# Or run as Python module
+python -m nba_mcp_server
 ```
 
 ## Example Queries

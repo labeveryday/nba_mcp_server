@@ -5,13 +5,36 @@ build-backend = "hatchling.build"
 [project]
 name = "nba-mcp-server"
 version = "0.1.0"
-description = "MCP server for accessing NBA stats and data via direct API calls"
+description = "MCP server for accessing NBA statistics and data via direct API calls"
 readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Du'An Lightfoot", email = "duanlightfoot@gmail.com"}
+]
+keywords = ["nba", "mcp", "basketball", "stats", "api", "model-context-protocol", "sports"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Games/Entertainment",
+]
 dependencies = [
     "mcp>=1.0.0",
     "httpx>=0.27.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/labeveryday/nba_mcp_server"
+Repository = "https://github.com/labeveryday/nba_mcp_server"
+Issues = "https://github.com/labeveryday/nba_mcp_server/issues"
+Documentation = "https://github.com/labeveryday/nba_mcp_server#readme"
 
 [project.optional-dependencies]
 dev = [
@@ -20,10 +43,10 @@ dev = [
 ]
 
 [project.scripts]
-nba-server = "nba_server:main"
+nba-mcp-server = "nba_mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src/nba_mcp_server"]
 
 [tool.uv]
 dev-dependencies = [
