@@ -826,11 +826,11 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             player_id = arguments["player_id"]
             season = arguments.get("season", get_current_season())
 
-            url = f"{NBA_STATS_API}/playerdashboardbyyearoveryear"
+            # Use playercareerstats which returns all seasons - more reliable than playerdashboardbyyearoveryear
+            url = f"{NBA_STATS_API}/playercareerstats"
             params = {
                 "PlayerID": player_id,
-                "Season": season,
-                "SeasonType": "Regular Season"
+                "PerMode": "PerGame"  # Get per-game averages
             }
 
             data = await fetch_nba_data(url, params)
@@ -838,23 +838,48 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             if not data:
                 return [TextContent(type="text", text="Error fetching player stats. Please try again.")]
 
-            # Parse season stats
-            stats_data = safe_get(data, "resultSets", 0, "rowSet", 0, default=[])
+            # Get SeasonTotalsRegularSeason resultSet (contains all regular season stats by year)
+            headers = safe_get(data, "resultSets", 0, "headers", default=[])
+            all_seasons = safe_get(data, "resultSets", 0, "rowSet", default=[])
 
-            if not stats_data or stats_data == "N/A":
-                return [TextContent(type="text", text=f"No stats found for season {season}.")]
+            if not all_seasons:
+                return [TextContent(type="text", text="No stats found for this player.")]
+
+            # Find the specific season
+            season_id_idx = headers.index("SEASON_ID") if "SEASON_ID" in headers else 1
+            stats_data = None
+
+            for season_row in all_seasons:
+                if safe_get(season_row, season_id_idx) == season:
+                    stats_data = season_row
+                    break
+
+            if not stats_data:
+                return [TextContent(type="text", text=f"No stats found for season {season}. Player may not have played that season.")]
+
+            # Map header indices
+            gp_idx = headers.index("GP") if "GP" in headers else 6
+            min_idx = headers.index("MIN") if "MIN" in headers else 8
+            pts_idx = headers.index("PTS") if "PTS" in headers else 26
+            reb_idx = headers.index("REB") if "REB" in headers else 18
+            ast_idx = headers.index("AST") if "AST" in headers else 19
+            stl_idx = headers.index("STL") if "STL" in headers else 21
+            blk_idx = headers.index("BLK") if "BLK" in headers else 22
+            fg_pct_idx = headers.index("FG_PCT") if "FG_PCT" in headers else 9
+            fg3_pct_idx = headers.index("FG3_PCT") if "FG3_PCT" in headers else 12
+            ft_pct_idx = headers.index("FT_PCT") if "FT_PCT" in headers else 15
 
             result = f"Season Stats ({season}):\n\n"
-            result += f"Games Played: {safe_get(stats_data, 3)}\n"  # GP
-            result += f"Minutes Per Game: {format_stat(safe_get(stats_data, 8))}\n"  # MIN
-            result += f"Points Per Game: {format_stat(safe_get(stats_data, 26))}\n"  # PTS
-            result += f"Rebounds Per Game: {format_stat(safe_get(stats_data, 18))}\n"  # REB
-            result += f"Assists Per Game: {format_stat(safe_get(stats_data, 19))}\n"  # AST
-            result += f"Steals Per Game: {format_stat(safe_get(stats_data, 21))}\n"  # STL
-            result += f"Blocks Per Game: {format_stat(safe_get(stats_data, 22))}\n"  # BLK
-            result += f"FG%: {format_stat(safe_get(stats_data, 9), True)}\n"  # FG_PCT
-            result += f"3P%: {format_stat(safe_get(stats_data, 12), True)}\n"  # FG3_PCT
-            result += f"FT%: {format_stat(safe_get(stats_data, 15), True)}\n"  # FT_PCT
+            result += f"Games Played: {safe_get(stats_data, gp_idx)}\n"
+            result += f"Minutes Per Game: {format_stat(safe_get(stats_data, min_idx))}\n"
+            result += f"Points Per Game: {format_stat(safe_get(stats_data, pts_idx))}\n"
+            result += f"Rebounds Per Game: {format_stat(safe_get(stats_data, reb_idx))}\n"
+            result += f"Assists Per Game: {format_stat(safe_get(stats_data, ast_idx))}\n"
+            result += f"Steals Per Game: {format_stat(safe_get(stats_data, stl_idx))}\n"
+            result += f"Blocks Per Game: {format_stat(safe_get(stats_data, blk_idx))}\n"
+            result += f"FG%: {format_stat(safe_get(stats_data, fg_pct_idx), True)}\n"
+            result += f"3P%: {format_stat(safe_get(stats_data, fg3_pct_idx), True)}\n"
+            result += f"FT%: {format_stat(safe_get(stats_data, ft_pct_idx), True)}\n"
 
             return [TextContent(type="text", text=result)]
 

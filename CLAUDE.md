@@ -186,6 +186,7 @@ score = safe_get(home_team, "score", default=0)
 3. **Schedule API Data**: The scheduleLeagueV2.json endpoint provides the full season schedule including future games, but data structure differs from Stats API (uses nested objects instead of resultSets arrays)
 4. **Player Search**: The `search_players` tool sets `IsOnlyCurrentSeason=0` to include retired players in results
 5. **League Leaders Endpoint**: The original `leagueleaders` endpoint frequently returns 500 errors. The `get_league_leaders` tool now uses `leaguegamelog` and aggregates game-by-game data to calculate season averages (lines 1218-1321)
+6. **Player Season Stats Endpoint**: The `playerdashboardbyyearoveryear` endpoint frequently returns 500 errors. The `get_player_season_stats` tool now uses `playercareerstats` and filters by season (lines 825-884)
 
 ## Working with the Code
 
