@@ -30,13 +30,35 @@ python -m nba_mcp_server
 
 ```bash
 # Using uv (recommended)
-uv sync
+uv sync --all-extras  # Installs dev dependencies including pytest
 
 # Using pip
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"  # Installs package in editable mode with dev dependencies
 ```
+
+### Running Tests
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run with coverage report
+uv run pytest --cov=nba_mcp_server --cov-report=html
+
+# Run specific test file or function
+uv run pytest tests/test_helpers.py
+uv run pytest tests/test_server.py::TestGetAllTeams
+
+# Run with verbose output
+uv run pytest -v
+```
+
+The test suite includes:
+- **Unit tests** (`tests/test_helpers.py`): Tests for utility functions (safe_get, format_stat, get_current_season)
+- **Integration tests** (`tests/test_server.py`): Tests for server initialization, tool registration, and API calls with mocking
+- **Fixtures** (`tests/conftest.py`): Reusable test fixtures for mock data and responses
 
 ### Testing with MCP Clients
 

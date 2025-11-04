@@ -436,6 +436,40 @@ This server uses direct HTTP calls to official NBA APIs:
 - **Box Score Timing**: Detailed player stats may take a few minutes to appear after a game ends.
 - **Rate Limiting**: The NBA APIs may rate limit requests. The server handles errors gracefully.
 
+## Development
+
+### Running Tests
+
+```bash
+# Install dev dependencies
+uv sync --all-extras
+
+# Run tests
+uv run pytest
+
+# Run tests with coverage
+uv run pytest --cov=nba_mcp_server --cov-report=html
+
+# Run specific test file
+uv run pytest tests/test_helpers.py
+
+# Run with verbose output
+uv run pytest -v
+```
+
+### Code Quality
+
+```bash
+# Install ruff
+uv pip install ruff
+
+# Check code
+uv run ruff check src/
+
+# Format code
+uv run ruff format src/
+```
+
 ## Requirements
 
 - Python 3.10+
