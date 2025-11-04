@@ -48,7 +48,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 2. Clone and set up the project:
 ```bash
-git clone https://github.com/yourusername/nba_mcp_server.git
+git clone https://github.com/labeveryday/nba_mcp_server.git
 cd nba_mcp_server
 uv sync
 ```
@@ -57,7 +57,7 @@ uv sync
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/nba_mcp_server.git
+git clone https://github.com/labeveryday/nba_mcp_server.git
 cd nba_mcp_server
 ```
 
@@ -83,7 +83,7 @@ from strands.tools.mcp import MCPClient
 mcp_client = MCPClient(lambda: stdio_client(
     StdioServerParameters(
         command="uv",
-        args=["run", "python", "/path/to/nba_mcp_server/src/nba_server.py"]
+        args=["--directory", "/path/to/nba_mcp_server/src/", "run", "nba_server.py"]
     )
 ))
 ```
@@ -113,9 +113,9 @@ Add this configuration to your Claude Desktop config file:
     "nba-stats": {
       "command": "uv",
       "args": [
-        "run",
-        "python",
-        "/absolute/path/to/nba_mcp_server/src/nba_server.py"
+        "--directory",
+        "/absolute/path/to/nba_mcp_server/src/",
+        "run", "nba_server.py"
       ]
     }
   }
