@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ENDPOINT_VERIFICATION.md report documenting all working endpoints
 - Verification script to test all tools with real API calls
 - Test coverage for new awards tools (4 new tests, 29 total)
+- Configurable logging via `NBA_MCP_LOG_LEVEL` environment variable (defaults to WARNING for production)
 
 ### Fixed
 - `get_player_season_stats` now uses `playercareerstats` endpoint (fixes 500 errors)

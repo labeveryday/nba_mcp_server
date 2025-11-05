@@ -12,6 +12,7 @@ Uses direct HTTP calls to NBA APIs for better reliability and control.
 """
 
 import logging
+import os
 from typing import Any, Optional
 from datetime import datetime
 import json
@@ -21,8 +22,12 @@ from mcp.types import Tool, TextContent
 import mcp.server.stdio
 import httpx
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging - default to WARNING for production, can be overridden with NBA_MCP_LOG_LEVEL
+log_level = os.getenv("NBA_MCP_LOG_LEVEL", "WARNING").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.WARNING),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger("nba-mcp-server")
 
 # NBA API endpoints
