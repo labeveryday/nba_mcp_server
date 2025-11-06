@@ -122,7 +122,7 @@ uv sync
 
 ### With pip
 ```bash
-pip install nba-mcp-server
+pip install nba-stats-mcp
 ```
 
 ### From source
@@ -143,15 +143,19 @@ from strands.tools.mcp import MCPClient
 
 mcp_client = MCPClient(lambda: stdio_client(
     StdioServerParameters(
-        command="uv",
-        args=["--directory", "/path/to/nba_mcp_server/", "run", "nba-mcp-server"]
+        command="uvx",
+        args=["nba-stats-mcp"]
     )
 ))
 ```
 
 ### Running Standalone (for testing)
 ```bash
-uv run nba-mcp-server
+# If installed via pip/uvx
+nba-stats-mcp
+
+# Or from source
+uv run nba-stats-mcp
 # or
 python -m nba_mcp_server
 ```
@@ -164,7 +168,7 @@ Control logging verbosity with the `NBA_MCP_LOG_LEVEL` environment variable (def
 
 ```bash
 export NBA_MCP_LOG_LEVEL=INFO  # For debugging
-uv run nba-mcp-server
+nba-stats-mcp
 ```
 
 In Claude Desktop config:
@@ -172,8 +176,8 @@ In Claude Desktop config:
 {
   "mcpServers": {
     "nba-stats": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/nba_mcp_server/", "run", "nba-mcp-server"],
+      "command": "uvx",
+      "args": ["nba-stats-mcp"],
       "env": {
         "NBA_MCP_LOG_LEVEL": "INFO"
       }
