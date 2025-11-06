@@ -1,6 +1,12 @@
 """NBA MCP Server - Access NBA statistics via Model Context Protocol."""
 
-from nba_mcp_server.server import main
+import asyncio
+from nba_mcp_server.server import main as async_main
 
-__version__ = "0.1.0"
+__version__ = "0.1.3"
+
+def main():
+    """Entry point that runs the async main function."""
+    asyncio.run(async_main())
+
 __all__ = ["main", "__version__"]
