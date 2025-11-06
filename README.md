@@ -3,7 +3,7 @@
 [![PyPI version](https://badge.fury.io/py/nba-stats-mcp.svg)](https://badge.fury.io/py/nba-stats-mcp)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Downloads](https://static.pepy.tech/badge/nba-stats-mcp)](https://pepy.tech/project/nba-stats-mcp)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/labeveryday/nba_mcp_server)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
 Access comprehensive NBA statistics via Model Context Protocol
