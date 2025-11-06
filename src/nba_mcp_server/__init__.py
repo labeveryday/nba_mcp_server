@@ -3,7 +3,7 @@
 import asyncio
 from nba_mcp_server.server import main as async_main
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 def main():
     """Entry point that runs the async main function."""
