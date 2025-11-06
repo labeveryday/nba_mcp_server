@@ -1,5 +1,11 @@
 # 🏀 NBA MCP Server
 
+[![PyPI version](https://badge.fury.io/py/nba-stats-mcp.svg)](https://badge.fury.io/py/nba-stats-mcp)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Downloads](https://static.pepy.tech/badge/nba-stats-mcp)](https://pepy.tech/project/nba-stats-mcp)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+
 Access comprehensive NBA statistics via Model Context Protocol
 
 A Model Context Protocol (MCP) server that provides access to live and historical NBA data including player stats, game scores, team information, and advanced analytics.
@@ -8,13 +14,16 @@ A Model Context Protocol (MCP) server that provides access to live and historica
 
 1. Install the server:
 ```bash
-# Using uv (recommended)
+# Using uvx (recommended - no install required)
+uvx nba-stats-mcp
+
+# Or using pip
+pip install nba-stats-mcp
+
+# Or from source
 git clone https://github.com/labeveryday/nba_mcp_server.git
 cd nba_mcp_server
 uv sync
-
-# Or using pip
-pip install nba-mcp-server
 ```
 
 2. Add to your Claude Desktop config file:
@@ -26,12 +35,24 @@ pip install nba-mcp-server
 {
   "mcpServers": {
     "nba-stats": {
+      "command": "uvx",
+      "args": ["nba-stats-mcp"]
+    }
+  }
+}
+```
+
+Or if you installed from source:
+```json
+{
+  "mcpServers": {
+    "nba-stats": {
       "command": "uv",
       "args": [
         "--directory",
         "/absolute/path/to/nba_mcp_server/",
         "run",
-        "nba-mcp-server"
+        "nba-stats-mcp"
       ]
     }
   }
