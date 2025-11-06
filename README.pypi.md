@@ -18,7 +18,7 @@ Add to your MCP client config (e.g., Claude Desktop):
   "mcpServers": {
     "nba-stats": {
       "command": "uvx",
-      "args": ["nba-mcp-server"]
+      "args": ["nba-stats-mcp"]
     }
   }
 }
@@ -29,7 +29,7 @@ Restart your client and start asking!
 ### With pip
 
 ```bash
-pip install nba-mcp-server
+pip install nba-stats-mcp
 ```
 
 Then configure your MCP client:
@@ -38,7 +38,7 @@ Then configure your MCP client:
 {
   "mcpServers": {
     "nba-stats": {
-      "command": "nba-mcp-server"
+      "command": "nba-stats-mcp"
     }
   }
 }
