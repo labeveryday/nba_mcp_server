@@ -57,7 +57,7 @@ Then configure your MCP client:
 
 ## Features
 
-**26 comprehensive tools** providing access to:
+**30 comprehensive tools** providing access to:
 - Live game scores and play-by-play
 - Player stats, career data, and awards
 - Team rosters and advanced metrics

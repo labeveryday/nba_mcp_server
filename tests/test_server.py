@@ -1,9 +1,11 @@
 """Tests for NBA MCP server."""
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
-from nba_mcp_server.server import server, fetch_nba_data, call_tool
 from mcp.types import TextContent
+
+from nba_mcp_server.server import call_tool, fetch_nba_data, server
 
 
 class TestServerInitialization:
@@ -178,11 +180,11 @@ class TestToolsListRegistration:
 
     @pytest.mark.asyncio
     async def test_list_tools_count(self):
-        """Test that all 26 tools are registered."""
+        """Test that all tools are registered."""
         from nba_mcp_server.server import list_tools
 
         tools = await list_tools()
-        assert len(tools) == 26
+        assert len(tools) == 30
 
     @pytest.mark.asyncio
     async def test_list_tools_names(self):
@@ -193,6 +195,10 @@ class TestToolsListRegistration:
         tool_names = [tool.name for tool in tools]
 
         expected_tools = [
+            "get_server_info",
+            "resolve_team_id",
+            "resolve_player_id",
+            "find_game_id",
             "get_todays_scoreboard",
             "get_scoreboard_by_date",
             "get_game_details",
@@ -223,6 +229,21 @@ class TestToolsListRegistration:
 
         for expected in expected_tools:
             assert expected in tool_names
+
+
+class TestServerInfoTool:
+    """Tests for server info tool."""
+
+    @pytest.mark.asyncio
+    async def test_get_server_info(self):
+        """Test get_server_info tool output."""
+        result = await call_tool("get_server_info", {})
+
+        assert len(result) == 1
+        assert isinstance(result[0], TextContent)
+        assert "NBA MCP Server Info" in result[0].text
+        assert "Version:" in result[0].text
+        assert "Max concurrency:" in result[0].text
 
 
 class TestShotChartTools:

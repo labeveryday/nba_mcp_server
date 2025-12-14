@@ -11,16 +11,22 @@ This server provides various tools to access NBA data including:
 Uses direct HTTP calls to NBA APIs for better reliability and control.
 """
 
+import asyncio
+import difflib
+import json
 import logging
 import os
-from typing import Any, Optional
+import random
+import ssl
+import time
+from dataclasses import dataclass
 from datetime import datetime
-import json
+from typing import Any, Optional
 
-from mcp.server import Server
-from mcp.types import Tool, TextContent
-import mcp.server.stdio
 import httpx
+import mcp.server.stdio
+from mcp.server import Server
+from mcp.types import TextContent, Tool
 
 # Configure logging - default to WARNING for production, can be overridden with NBA_MCP_LOG_LEVEL
 log_level = os.getenv("NBA_MCP_LOG_LEVEL", "WARNING").upper()
@@ -34,6 +40,40 @@ logger = logging.getLogger("nba-mcp-server")
 NBA_LIVE_API = "https://cdn.nba.com/static/json/liveData"
 NBA_STATS_API = "https://stats.nba.com/stats"
 
+# Hardcoded team mapping (fast + reliable; also used by resolver tools)
+NBA_TEAMS: dict[int, str] = {
+    1610612737: "Atlanta Hawks",
+    1610612738: "Boston Celtics",
+    1610612751: "Brooklyn Nets",
+    1610612766: "Charlotte Hornets",
+    1610612741: "Chicago Bulls",
+    1610612739: "Cleveland Cavaliers",
+    1610612742: "Dallas Mavericks",
+    1610612743: "Denver Nuggets",
+    1610612765: "Detroit Pistons",
+    1610612744: "Golden State Warriors",
+    1610612745: "Houston Rockets",
+    1610612754: "Indiana Pacers",
+    1610612746: "LA Clippers",
+    1610612747: "Los Angeles Lakers",
+    1610612763: "Memphis Grizzlies",
+    1610612748: "Miami Heat",
+    1610612749: "Milwaukee Bucks",
+    1610612750: "Minnesota Timberwolves",
+    1610612740: "New Orleans Pelicans",
+    1610612752: "New York Knicks",
+    1610612760: "Oklahoma City Thunder",
+    1610612753: "Orlando Magic",
+    1610612755: "Philadelphia 76ers",
+    1610612756: "Phoenix Suns",
+    1610612757: "Portland Trail Blazers",
+    1610612758: "Sacramento Kings",
+    1610612759: "San Antonio Spurs",
+    1610612761: "Toronto Raptors",
+    1610612762: "Utah Jazz",
+    1610612764: "Washington Wizards",
+}
+
 # Standard headers for NBA API requests
 NBA_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
@@ -46,9 +86,234 @@ NBA_HEADERS = {
 # Create server instance
 server = Server("nba-stats-server")
 
-# HTTP client with timeout
-http_client = httpx.Client(timeout=30.0, headers=NBA_HEADERS)
+# ==================== Runtime Configuration ====================
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+# HTTP client config
+NBA_MCP_HTTP_TIMEOUT_SECONDS = _env_float("NBA_MCP_HTTP_TIMEOUT_SECONDS", 30.0)
+NBA_MCP_MAX_CONCURRENCY = max(1, _env_int("NBA_MCP_MAX_CONCURRENCY", 8))
+NBA_MCP_RETRIES = max(0, _env_int("NBA_MCP_RETRIES", 2))
+NBA_MCP_CACHE_TTL_SECONDS = max(0.0, _env_float("NBA_MCP_CACHE_TTL_SECONDS", 120.0))
+NBA_MCP_LIVE_CACHE_TTL_SECONDS = max(0.0, _env_float("NBA_MCP_LIVE_CACHE_TTL_SECONDS", 5.0))
+
+
+# TLS verification (default on). In some sandboxed/macOS privacy-restricted environments, reading CA files
+# can raise PermissionError; we fall back safely if needed.
+NBA_MCP_TLS_VERIFY = os.getenv("NBA_MCP_TLS_VERIFY", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+# HTTP client with timeout (sync client; we run requests in a thread to avoid blocking the MCP event loop)
+# NOTE: Lazily initialized to avoid crashing the MCP server during import/init when SSL CA files are not readable.
+http_client: Any = None
+
+
+def _get_http_client() -> httpx.Client:
+    """Get (and lazily initialize) the module-level HTTP client."""
+    global http_client
+    if http_client is not None:
+        return http_client
+
+    try:
+        http_client = httpx.Client(
+            timeout=NBA_MCP_HTTP_TIMEOUT_SECONDS,
+            headers=NBA_HEADERS,
+            follow_redirects=True,
+            verify=NBA_MCP_TLS_VERIFY,
+        )
+        return http_client
+    except PermissionError as e:
+        # Common in sandboxed environments or macOS privacy restrictions where cert bundles are not readable.
+        # If TLS verification is enabled, try a system-default SSLContext that does NOT rely on certifi's file.
+        if NBA_MCP_TLS_VERIFY:
+            logger.warning(
+                "Permission error initializing TLS verification (CA bundle not readable). "
+                "Falling back to system default SSLContext (still verifies TLS). "
+                "If you must disable TLS verification (NOT recommended), set NBA_MCP_TLS_VERIFY=0. "
+                f"Error: {e}"
+            )
+            ctx = ssl.create_default_context()
+            http_client = httpx.Client(
+                timeout=NBA_MCP_HTTP_TIMEOUT_SECONDS,
+                headers=NBA_HEADERS,
+                follow_redirects=True,
+                verify=ctx,
+            )
+            return http_client
+
+        # TLS verify explicitly disabled by user.
+        http_client = httpx.Client(
+            timeout=NBA_MCP_HTTP_TIMEOUT_SECONDS,
+            headers=NBA_HEADERS,
+            follow_redirects=True,
+            # TLS verify explicitly disabled by user via NBA_MCP_TLS_VERIFY=0 (NOT recommended).
+            verify=False,  # nosec B501
+        )
+        return http_client
+
+# Bound concurrent outbound requests so agents can safely parallelize calls.
+_request_semaphore: Optional[asyncio.Semaphore] = None
+
+
+def _get_request_semaphore() -> asyncio.Semaphore:
+    """Get (and lazily initialize) the request semaphore."""
+    global _request_semaphore
+    if _request_semaphore is None:
+        _request_semaphore = asyncio.Semaphore(NBA_MCP_MAX_CONCURRENCY)
+    return _request_semaphore
+
+
+@dataclass(frozen=True)
+class _CacheEntry:
+    expires_at: float
+    value: dict
+
+
+_cache: dict[str, _CacheEntry] = {}
+_cache_lock: Optional[asyncio.Lock] = None
+
+
+def _get_cache_lock() -> asyncio.Lock:
+    """Get (and lazily initialize) the cache lock."""
+    global _cache_lock
+    if _cache_lock is None:
+        _cache_lock = asyncio.Lock()
+    return _cache_lock
+
+
+def _cache_ttl_for_url(url: str) -> float:
+    # Live endpoints update quickly; keep cache tight.
+    if url.startswith(NBA_LIVE_API):
+        return NBA_MCP_LIVE_CACHE_TTL_SECONDS
+    return NBA_MCP_CACHE_TTL_SECONDS
+
+
+def _cache_key(url: str, params: Optional[dict]) -> str:
+    if not params:
+        return url
+    # Stable ordering for cache key.
+    items = sorted((str(k), str(v)) for k, v in params.items())
+    return f"{url}?{json.dumps(items, separators=(',', ':'), ensure_ascii=True)}"
+
+
+def _team_name_from_id(team_id: Any) -> str:
+    """Best-effort mapping from NBA team_id -> team name."""
+    try:
+        tid = int(team_id)
+    except Exception:
+        return str(team_id)
+    return NBA_TEAMS.get(tid, str(tid))
+
+
+def _to_int(value: Any) -> Optional[int]:
+    """Best-effort int conversion."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+async def _get_scoreboard_games_stats_api(date_obj: datetime) -> Optional[list[dict[str, Any]]]:
+    """
+    Fallback scoreboard source via stats.nba.com (scoreboardv2).
+    Returns a list of dicts: {game_id, home_name, away_name, home_score, away_score, status}.
+    """
+    url = f"{NBA_STATS_API}/scoreboardv2"
+    params = {
+        "GameDate": date_obj.strftime("%m/%d/%Y"),
+        "LeagueID": "00",
+        "DayOffset": "0",
+    }
+    data = await fetch_nba_data(url, params)
+    if not data:
+        return None
+
+    result_sets = safe_get(data, "resultSets", default=[])
+    if not result_sets or result_sets == "N/A":
+        return None
+
+    game_header = None
+    line_score = None
+    for rs in result_sets:
+        name = safe_get(rs, "name", default="")
+        if name == "GameHeader":
+            game_header = rs
+        elif name == "LineScore":
+            line_score = rs
+
+    if not game_header:
+        return None
+
+    gh_headers = safe_get(game_header, "headers", default=[])
+    gh_rows = safe_get(game_header, "rowSet", default=[])
+    if not gh_headers or not gh_rows:
+        return []
+
+    def _idx(headers: list, col: str, fallback: int) -> int:
+        try:
+            return headers.index(col)
+        except ValueError:
+            return fallback
+
+    gid_idx = _idx(gh_headers, "GAME_ID", 2)
+    home_id_idx = _idx(gh_headers, "HOME_TEAM_ID", 6)
+    away_id_idx = _idx(gh_headers, "VISITOR_TEAM_ID", 7)
+    status_text_idx = _idx(gh_headers, "GAME_STATUS_TEXT", -1)
+
+    scores: dict[tuple[str, int], Any] = {}
+    if line_score:
+        ls_headers = safe_get(line_score, "headers", default=[])
+        ls_rows = safe_get(line_score, "rowSet", default=[])
+        if ls_headers and ls_rows:
+            ls_gid_idx = _idx(ls_headers, "GAME_ID", 0)
+            ls_team_id_idx = _idx(ls_headers, "TEAM_ID", 1)
+            ls_pts_idx = _idx(ls_headers, "PTS", -1)
+            for row in ls_rows:
+                game_id = str(safe_get(row, ls_gid_idx, default=""))
+                team_id = _to_int(safe_get(row, ls_team_id_idx, default=0))
+                if team_id is None:
+                    continue
+                pts = safe_get(row, ls_pts_idx, default="N/A") if ls_pts_idx >= 0 else "N/A"
+                scores[(game_id, team_id)] = pts
+
+    games: list[dict[str, Any]] = []
+    for row in gh_rows:
+        game_id = str(safe_get(row, gid_idx, default="N/A"))
+        home_id_val = safe_get(row, home_id_idx, default="N/A")
+        away_id_val = safe_get(row, away_id_idx, default="N/A")
+        try:
+            home_id = int(home_id_val)
+        except Exception:
+            home_id = 0
+        try:
+            away_id = int(away_id_val)
+        except Exception:
+            away_id = 0
+
+        status = safe_get(row, status_text_idx, default="Unknown") if status_text_idx >= 0 else "Unknown"
+        games.append(
+            {
+                "game_id": game_id,
+                "home_name": _team_name_from_id(home_id),
+                "away_name": _team_name_from_id(away_id),
+                "home_score": scores.get((game_id, home_id), "N/A"),
+                "away_score": scores.get((game_id, away_id), "N/A"),
+                "status": status,
+            }
+        )
+
+    return games
 
 # ==================== Helper Functions ====================
 
@@ -88,19 +353,87 @@ def format_stat(value: Any, is_percentage: bool = False) -> str:
 
 async def fetch_nba_data(url: str, params: Optional[dict] = None) -> Optional[dict]:
     """Fetch data from NBA API with error handling."""
-    try:
-        response = http_client.get(url, params=params)
-        response.raise_for_status()
-        return response.json()
-    except httpx.HTTPError as e:
-        logger.error(f"HTTP error fetching {url}: {e}")
-        return None
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON decode error for {url}: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error fetching {url}: {e}")
-        return None
+    ttl = _cache_ttl_for_url(url)
+    key = _cache_key(url, params)
+
+    if ttl > 0:
+        now = time.monotonic()
+        async with _get_cache_lock():
+            entry = _cache.get(key)
+            if entry and entry.expires_at > now:
+                logger.debug(f"Cache hit for {url}")
+                return entry.value
+            if entry:
+                _cache.pop(key, None)
+
+    # Retry with backoff for transient failures (429 / 5xx / network errors).
+    attempt = 0
+    last_error: Optional[Exception] = None
+
+    while attempt <= NBA_MCP_RETRIES:
+        try:
+            client = _get_http_client()
+            async with _get_request_semaphore():
+                response = await asyncio.to_thread(client.get, url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            if ttl > 0:
+                async with _get_cache_lock():
+                    _cache[key] = _CacheEntry(expires_at=time.monotonic() + ttl, value=data)
+            return data
+
+        except httpx.HTTPStatusError as e:
+            last_error = e
+            status = getattr(e.response, "status_code", None)
+            # Only retry on 429 / 5xx.
+            if status in (429,) or (isinstance(status, int) and status >= 500):
+                if attempt >= NBA_MCP_RETRIES:
+                    break
+                retry_after = None
+                try:
+                    ra = e.response.headers.get("Retry-After")
+                    if ra:
+                        retry_after = float(ra)
+                except Exception:
+                    retry_after = None
+                # Non-cryptographic jitter is fine for backoff timing.
+                delay = retry_after if retry_after is not None else (0.5 * (2 ** attempt)) + random.random() * 0.2  # nosec B311
+                logger.warning(f"HTTP {status} from NBA API; retrying in {delay:.2f}s (attempt {attempt+1}/{NBA_MCP_RETRIES})")
+                await asyncio.sleep(delay)
+                attempt += 1
+                continue
+
+            logger.error(f"HTTP status error fetching {url}: {e}")
+            return None
+
+        except (httpx.TimeoutException, httpx.TransportError) as e:
+            last_error = e
+            if attempt >= NBA_MCP_RETRIES:
+                break
+            # Non-cryptographic jitter is fine for backoff timing.
+            delay = (0.5 * (2 ** attempt)) + random.random() * 0.2  # nosec B311
+            logger.warning(f"Network error from NBA API; retrying in {delay:.2f}s (attempt {attempt+1}/{NBA_MCP_RETRIES}): {e}")
+            await asyncio.sleep(delay)
+            attempt += 1
+            continue
+
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error for {url}: {e}")
+            return None
+
+        except Exception as e:
+            logger.error(f"Unexpected error fetching {url}: {e}")
+            return None
+
+    logger.error(f"Failed fetching {url} after retries: {last_error}")
+    return None
+
+
+async def clear_cache() -> None:
+    """Clear the in-memory response cache."""
+    async with _get_cache_lock():
+        _cache.clear()
 
 
 def get_current_season() -> str:
@@ -121,6 +454,54 @@ def get_current_season() -> str:
 async def list_tools() -> list[Tool]:
     """List all available NBA tools."""
     return [
+        Tool(
+            name="get_server_info",
+            description="Get NBA MCP server runtime info (version, config, cache/concurrency settings). Useful for debugging and agent diagnostics.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
+            name="resolve_team_id",
+            description="Resolve an NBA team name (e.g., 'Lakers', 'Boston') to official NBA team IDs.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Team name, city, or nickname (e.g., 'Lakers', 'Boston', 'Warriors')"},
+                    "limit": {"type": "integer", "description": "Max results to return (default 5)"},
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="resolve_player_id",
+            description="Resolve an NBA player name (e.g., 'LeBron James') to NBA player IDs. Uses the official stats endpoint.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Player name or partial name (e.g., 'LeBron', 'Curry', 'Wembanyama')"},
+                    "active_only": {"type": "boolean", "description": "If true, only return active players (default false)"},
+                    "limit": {"type": "integer", "description": "Max results to return (default 10)"},
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="find_game_id",
+            description="Find game IDs for a specific date and matchup (helps agents get the right game_id for box score, play-by-play, etc.).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "date": {"type": "string", "description": "Date in format YYYYMMDD (e.g., '20241103')"},
+                    "home_team": {"type": "string", "description": "Home team name/city/nickname (optional)"},
+                    "away_team": {"type": "string", "description": "Away team name/city/nickname (optional)"},
+                    "team": {"type": "string", "description": "Single-team filter (matches either home or away) (optional)"},
+                    "limit": {"type": "integer", "description": "Max results to return (default 10)"},
+                },
+                "required": ["date"],
+            },
+        ),
         # Live Game Tools
         Tool(
             name="get_todays_scoreboard",
@@ -558,6 +939,192 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
     """Handle tool calls for NBA data."""
 
     try:
+        if name == "get_server_info":
+            from nba_mcp_server import __version__
+
+            # We don't expose full env for safety; just key runtime knobs.
+            result = "NBA MCP Server Info:\n\n"
+            result += f"Version: {__version__}\n"
+            result += f"HTTP timeout (s): {NBA_MCP_HTTP_TIMEOUT_SECONDS}\n"
+            result += f"Max concurrency: {NBA_MCP_MAX_CONCURRENCY}\n"
+            result += f"Retries: {NBA_MCP_RETRIES}\n"
+            result += f"Cache TTL (stats, s): {NBA_MCP_CACHE_TTL_SECONDS}\n"
+            result += f"Cache TTL (live, s): {NBA_MCP_LIVE_CACHE_TTL_SECONDS}\n"
+            result += f"TLS verify enabled: {NBA_MCP_TLS_VERIFY}\n"
+            result += f"Log level: {log_level}\n"
+            return [TextContent(type="text", text=result)]
+
+        if name == "resolve_team_id":
+            query = str(arguments.get("query", "")).strip().lower()
+            limit = int(arguments.get("limit", 5) or 5)
+
+            if not query:
+                return [TextContent(type="text", text="Please provide a non-empty team query.")]
+
+            scored: list[tuple[float, int, str]] = []
+            for team_id, team_name in NBA_TEAMS.items():
+                name_l = team_name.lower()
+                if query in name_l:
+                    score = 1.0
+                else:
+                    score = difflib.SequenceMatcher(None, query, name_l).ratio()
+                scored.append((score, team_id, team_name))
+
+            scored.sort(key=lambda x: x[0], reverse=True)
+            top = [s for s in scored if s[0] >= 0.3][: max(1, limit)]
+
+            if not top:
+                return [TextContent(type="text", text=f"No teams matched '{arguments.get('query')}'. Try a city or nickname (e.g., 'Boston', 'Lakers').")]
+
+            result = f"Team ID matches for '{arguments.get('query')}':\n\n"
+            for score, team_id, team_name in top:
+                result += f"ID: {team_id} | {team_name} (match: {score:.2f})\n"
+            return [TextContent(type="text", text=result)]
+
+        if name == "resolve_player_id":
+            query_raw = str(arguments.get("query", "")).strip()
+            query = query_raw.lower()
+            active_only = bool(arguments.get("active_only", False))
+            limit = int(arguments.get("limit", 10) or 10)
+
+            if not query_raw:
+                return [TextContent(type="text", text="Please provide a non-empty player query.")]
+
+            url = f"{NBA_STATS_API}/commonallplayers"
+            params = {
+                "LeagueID": "00",
+                "Season": get_current_season(),
+                "IsOnlyCurrentSeason": "0",
+            }
+
+            data = await fetch_nba_data(url, params)
+            if not data:
+                return [TextContent(type="text", text="Error fetching player data. Please try again.")]
+
+            rows = safe_get(data, "resultSets", 0, "rowSet", default=[])
+            if not rows or rows == "N/A":
+                return [TextContent(type="text", text="No player data returned by the NBA API.")]
+
+            matches: list[tuple[float, int, str, int]] = []
+            for row in rows:
+                # commonallplayers: PERSON_ID, ..., DISPLAY_FIRST_LAST at index 2, IS_ACTIVE near end (often 11)
+                player_id = _to_int(row[0] if isinstance(row, list) and row else None)
+                if player_id is None:
+                    continue
+                player_name = str(row[2]) if len(row) > 2 else ""
+                is_active = int(row[11]) if len(row) > 11 and str(row[11]).isdigit() else 1
+
+                if active_only and is_active != 1:
+                    continue
+
+                name_l = player_name.lower()
+                if query in name_l:
+                    score = 1.0
+                else:
+                    score = difflib.SequenceMatcher(None, query, name_l).ratio()
+                if score >= 0.35:
+                    matches.append((score, player_id, player_name, is_active))
+
+            matches.sort(key=lambda x: (x[3], x[0]), reverse=True)  # active first, then score
+            top = matches[: max(1, limit)]
+
+            if not top:
+                return [TextContent(type="text", text=f"No players matched '{query_raw}'. Try a different spelling or a shorter substring.")]
+
+            result = f"Player ID matches for '{query_raw}':\n\n"
+            for score, pid, name_, is_active in top:
+                status = "Active" if is_active == 1 else "Inactive"
+                result += f"ID: {pid} | Name: {name_} | Status: {status} (match: {score:.2f})\n"
+            return [TextContent(type="text", text=result)]
+
+        if name == "find_game_id":
+            date_str = str(arguments.get("date", "")).strip()
+            home_q = str(arguments.get("home_team", "")).strip().lower()
+            away_q = str(arguments.get("away_team", "")).strip().lower()
+            team_q = str(arguments.get("team", "")).strip().lower()
+            limit = int(arguments.get("limit", 10) or 10)
+
+            try:
+                date_obj = datetime.strptime(date_str, "%Y%m%d")
+                formatted_date = date_obj.strftime("%Y-%m-%d")
+            except ValueError:
+                return [TextContent(type="text", text="Invalid date format. Use YYYYMMDD (e.g., '20241103')")]
+
+            # Try live scoreboard first; if blocked/unavailable (e.g. 403), fall back to stats API scoreboardv2.
+            url = f"{NBA_LIVE_API}/scoreboard/scoreboard_{date_str}.json"
+            data = await fetch_nba_data(url)
+
+            games = safe_get(data, "scoreboard", "games", default=[]) if data else []
+            live_ok = bool(games and games != "N/A")
+
+            # Fallback: stats API scoreboardv2
+            if not live_ok:
+                stats_games = await _get_scoreboard_games_stats_api(date_obj)
+                if stats_games is None:
+                    return [TextContent(type="text", text=f"No data available for {formatted_date}. The NBA APIs may be unavailable or blocked.")]
+                if not stats_games:
+                    return [TextContent(type="text", text=f"No games found for {formatted_date}.")]
+
+                # Filter using simple substring matching on team names.
+                filtered_stats = []
+                for g in stats_games:
+                    home_name = str(g.get("home_name", "")).lower()
+                    away_name = str(g.get("away_name", "")).lower()
+                    if home_q and home_q not in home_name:
+                        continue
+                    if away_q and away_q not in away_name:
+                        continue
+                    if team_q and team_q not in home_name and team_q not in away_name:
+                        continue
+                    filtered_stats.append(g)
+
+                if not filtered_stats:
+                    return [TextContent(type="text", text=f"No games matched your filters for {formatted_date}. Try using only 'team' or check spelling.")]
+
+                result = f"Game ID matches for {formatted_date}:\n\n"
+                for g in filtered_stats[: max(1, limit)]:
+                    result += f"Game ID: {g.get('game_id', 'N/A')}\n"
+                    result += f"{g.get('away_name', 'Away')} @ {g.get('home_name', 'Home')}\n"
+                    result += f"Status: {g.get('status', 'Unknown')}\n\n"
+                return [TextContent(type="text", text=result)]
+
+            def _matches(team_obj: dict, q: str) -> bool:
+                if not q:
+                    return True
+                name = str(safe_get(team_obj, "teamName", default="")).lower()
+                city = str(safe_get(team_obj, "teamCity", default="")).lower()
+                return q in name or q in city or q in f"{city} {name}".strip()
+
+            filtered = []
+            for g in games:
+                home = safe_get(g, "homeTeam", default={})
+                away = safe_get(g, "awayTeam", default={})
+                if home == "N/A" or away == "N/A":
+                    continue
+
+                if home_q and not _matches(home, home_q):
+                    continue
+                if away_q and not _matches(away, away_q):
+                    continue
+                if team_q and not (_matches(home, team_q) or _matches(away, team_q)):
+                    continue
+
+                filtered.append(g)
+
+            if not filtered:
+                return [TextContent(type="text", text=f"No games matched your filters for {formatted_date}. Try using only 'team' or check spelling.")]
+
+            result = f"Game ID matches for {formatted_date}:\n\n"
+            for g in filtered[: max(1, limit)]:
+                gid = safe_get(g, "gameId", default="N/A")
+                home = safe_get(g, "homeTeam", default={})
+                away = safe_get(g, "awayTeam", default={})
+                status = safe_get(g, "gameStatusText", default="Unknown")
+                result += f"Game ID: {gid}\n"
+                result += f"{safe_get(away, 'teamName')} @ {safe_get(home, 'teamName')}\n"
+                result += f"Status: {status}\n\n"
+            return [TextContent(type="text", text=result)]
+
         # Live Game Tools
         if name == "get_todays_scoreboard":
             # Get today's scoreboard
@@ -565,7 +1132,20 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             data = await fetch_nba_data(url)
 
             if not data:
-                return [TextContent(type="text", text="Error fetching today's scoreboard. Please try again.")]
+                # Fallback to stats API scoreboardv2 for today's date
+                today = datetime.now()
+                stats_games = await _get_scoreboard_games_stats_api(today)
+                if stats_games is None:
+                    return [TextContent(type="text", text="Error fetching today's scoreboard. Please try again.")]
+                if not stats_games:
+                    return [TextContent(type="text", text=f"No games scheduled for {today.strftime('%Y-%m-%d')}.")]
+
+                result = f"NBA Games for {today.strftime('%Y-%m-%d')}:\n\n"
+                for g in stats_games:
+                    result += f"Game ID: {g.get('game_id', 'N/A')}\n"
+                    result += f"{g.get('away_name', 'Away')} ({g.get('away_score', 'N/A')}) @ {g.get('home_name', 'Home')} ({g.get('home_score', 'N/A')})\n"
+                    result += f"Status: {g.get('status', 'Unknown')}\n\n"
+                return [TextContent(type="text", text=result)]
 
             scoreboard = safe_get(data, "scoreboard")
             if not scoreboard or scoreboard == "N/A":
@@ -636,7 +1216,18 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             data = await fetch_nba_data(url)
 
             if not data:
-                return [TextContent(type="text", text=f"No data available for {formatted_date}. The game data might not be available yet or the date might be incorrect.")]
+                stats_games = await _get_scoreboard_games_stats_api(date_obj)
+                if stats_games is None:
+                    return [TextContent(type="text", text=f"No data available for {formatted_date}. The game data might not be available yet or the date might be incorrect.")]
+                if not stats_games:
+                    return [TextContent(type="text", text=f"No games found for {formatted_date}.")]
+
+                result = f"NBA Games for {formatted_date}:\n\n"
+                for g in stats_games:
+                    result += f"Game ID: {g.get('game_id', 'N/A')}\n"
+                    result += f"{g.get('away_name', 'Away')} ({g.get('away_score', 'N/A')}) @ {g.get('home_name', 'Home')} ({g.get('home_score', 'N/A')})\n"
+                    result += f"Status: {g.get('status', 'Unknown')}\n\n"
+                return [TextContent(type="text", text=result)]
 
             scoreboard = safe_get(data, "scoreboard")
             games = safe_get(scoreboard, "games", default=[])
@@ -1358,41 +1949,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         # Team Tools
         elif name == "get_all_teams":
             # Hardcoded list of NBA teams (more reliable than API for this)
-            teams = {
-                1610612737: "Atlanta Hawks",
-                1610612738: "Boston Celtics",
-                1610612751: "Brooklyn Nets",
-                1610612766: "Charlotte Hornets",
-                1610612741: "Chicago Bulls",
-                1610612739: "Cleveland Cavaliers",
-                1610612742: "Dallas Mavericks",
-                1610612743: "Denver Nuggets",
-                1610612765: "Detroit Pistons",
-                1610612744: "Golden State Warriors",
-                1610612745: "Houston Rockets",
-                1610612754: "Indiana Pacers",
-                1610612746: "LA Clippers",
-                1610612747: "Los Angeles Lakers",
-                1610612763: "Memphis Grizzlies",
-                1610612748: "Miami Heat",
-                1610612749: "Milwaukee Bucks",
-                1610612750: "Minnesota Timberwolves",
-                1610612740: "New Orleans Pelicans",
-                1610612752: "New York Knicks",
-                1610612760: "Oklahoma City Thunder",
-                1610612753: "Orlando Magic",
-                1610612755: "Philadelphia 76ers",
-                1610612756: "Phoenix Suns",
-                1610612757: "Portland Trail Blazers",
-                1610612758: "Sacramento Kings",
-                1610612759: "San Antonio Spurs",
-                1610612761: "Toronto Raptors",
-                1610612762: "Utah Jazz",
-                1610612764: "Washington Wizards",
-            }
-
             result = "NBA Teams:\n\n"
-            for team_id, team_name in sorted(teams.items(), key=lambda x: x[1]):
+            for team_id, team_name in sorted(NBA_TEAMS.items(), key=lambda x: x[1]):
                 result += f"ID: {team_id} | {team_name}\n"
 
             return [TextContent(type="text", text=result)]

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nba-stats-mcp"
-version = "0.1.4"
+version = "0.1.5"
 description = "MCP server for accessing NBA statistics and data via direct API calls"
 readme = "README.pypi.md"
 requires-python = ">=3.10"
@@ -42,6 +42,10 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0",
     "pytest-mock>=3.10",
+    "ruff>=0.8.0",
+    "bandit>=1.7.9",
+    "build>=1.2.2.post1",
+    "twine>=5.1.1",
 ]
 
 [project.scripts]
@@ -50,12 +54,26 @@ nba-stats-mcp = "nba_mcp_server:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/nba_mcp_server"]
 
-[tool.uv]
-dev-dependencies = [
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/dist",
+    "/htmlcov",
+    "/.pytest_cache",
+    "/.uv-cache",
+    "/.venv",
+    "/coverage.xml",
+]
+
+[dependency-groups]
+dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0",
     "pytest-mock>=3.10",
+    "ruff>=0.8.0",
+    "bandit>=1.7.9",
+    "build>=1.2.2.post1",
+    "twine>=5.1.1",
 ]
 
 [tool.pytest.ini_options]
@@ -90,3 +108,18 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]  # allow long lines (common in formatted output strings)
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E402"]  # tests may import after fixtures/mocks
+
+[tool.bandit]
+exclude_dirs = ["tests", "htmlcov", "dist", ".venv", ".pytest_cache"]
+skips = ["B101"]  # allow assert usage (common in tests)

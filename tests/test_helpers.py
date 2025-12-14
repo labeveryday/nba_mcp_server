@@ -1,8 +1,8 @@
 """Tests for helper functions."""
 
-import pytest
 from datetime import datetime
-from nba_mcp_server.server import safe_get, format_stat, get_current_season
+
+from nba_mcp_server.server import format_stat, get_current_season, safe_get
 
 
 class TestSafeGet:

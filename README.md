@@ -73,7 +73,13 @@ Or if you installed from source:
 - "Who are the league leaders in deflections?"
 - "Show me Giannis' career awards"
 
-## Available Tools (26 total)
+## Available Tools (30 total)
+
+### Server Utilities
+- `get_server_info` - Server version + runtime settings (timeouts, retries, cache, concurrency)
+- `resolve_team_id` - Resolve team name/city/nickname → team_id
+- `resolve_player_id` - Resolve player name → player_id (official stats endpoint)
+- `find_game_id` - Find game_id by date + matchup filters
 
 ### Player Stats
 - `search_players` - Find players by name
@@ -186,6 +192,38 @@ In Claude Desktop config:
 }
 ```
 
+### Performance & Reliability Tuning
+
+You can tune request behavior (helpful when agents do parallel tool calls) via env vars:
+
+- **`NBA_MCP_HTTP_TIMEOUT_SECONDS`**: Per-request timeout (default: `30`)
+- **`NBA_MCP_MAX_CONCURRENCY`**: Max concurrent outbound NBA API requests (default: `8`)
+- **`NBA_MCP_RETRIES`**: Retries for transient failures (429 / 5xx / network) (default: `2`)
+- **`NBA_MCP_CACHE_TTL_SECONDS`**: Cache TTL for stats endpoints (default: `120`)
+- **`NBA_MCP_LIVE_CACHE_TTL_SECONDS`**: Cache TTL for live endpoints (default: `5`)
+- **`NBA_MCP_TLS_VERIFY`**: TLS verification enabled (default: `1`). If you see `PermissionError` reading CA bundles (common in sandboxed/macOS privacy contexts), set to `0`.
+
+Example Claude Desktop config:
+
+```json
+{
+  "mcpServers": {
+    "nba-stats": {
+      "command": "uvx",
+      "args": ["nba-stats-mcp"],
+      "env": {
+        "NBA_MCP_LOG_LEVEL": "INFO",
+        "NBA_MCP_MAX_CONCURRENCY": "8",
+        "NBA_MCP_CACHE_TTL_SECONDS": "120",
+        "NBA_MCP_LIVE_CACHE_TTL_SECONDS": "5",
+        "NBA_MCP_RETRIES": "2",
+        "NBA_MCP_HTTP_TIMEOUT_SECONDS": "30"
+      }
+    }
+  }
+}
+```
+
 ## Data Sources
 
 This server uses official NBA APIs:
@@ -207,6 +245,35 @@ uv run pytest --cov=nba_mcp_server --cov-report=html
 uv run ruff check src/
 uv run ruff format src/
 ```
+
+### Security (Bandit)
+
+Static security analysis:
+
+```bash
+uv sync --all-extras
+uv run bandit -c pyproject.toml -r src/
+```
+
+## Releasing to PyPI
+
+This project uses Hatchling for builds. Recommended release steps:
+
+```bash
+# 1) Ensure clean env + tests
+uv sync --all-extras
+uv run pytest
+uv run ruff check src/ tests/
+uv run bandit -c pyproject.toml -r src/
+
+# 2) Build distributions
+uv run python -m build
+
+# 3) Upload
+uv run twine upload dist/*
+```
+
+Tip: for TestPyPI uploads, use `twine upload --repository testpypi dist/*`.
 
 ## Requirements
 

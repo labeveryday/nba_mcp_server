@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2025-12-14
+
+### Added
+- **Runtime improvements for agent workloads**
+  - Non-blocking HTTP execution (no event-loop blocking on network calls)
+  - Concurrency limiting, retries with backoff, and TTL caching
+  - `get_server_info` tool for diagnostics
+  - `resolve_team_id`, `resolve_player_id`, `find_game_id` helper tools for agent ergonomics
+- **Better local usage and demos**
+  - `python -m nba_mcp_server` support (`__main__.py`)
+  - Strands example agent with interactive REPL and `--demo` mode (`examples/strands_nba_agent.py`)
+  - Live end-to-end MCP tool smoke test (`scripts/live_mcp_tool_smoke_test.py`)
+- **Tooling**
+  - Ruff + Bandit configuration in `pyproject.toml`
+  - Release tooling (`build`, `twine`) included in dev dependencies
+
+### Changed
+- Server now exposes **30 tools**
+- Live scoreboard endpoints may return 403 in some environments; server falls back to stats API scoreboard for reliability
+
+### Fixed
+- MCP live smoke test no longer “hangs” (proper MCP session lifecycle + better progress output)
+- Server startup is more resilient in environments where CA bundles are not readable (`NBA_MCP_TLS_VERIFY`)
+
 ### Added
 - **Awards Tools**: Two new tools for accessing NBA awards and accolades
   - `get_player_awards` - Get all awards for a specific player (MVP, Championships, All-Star, All-NBA, etc.)
@@ -52,3 +76,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-platform CI testing (Ubuntu, macOS, Windows)
 
 [0.1.0]: https://github.com/labeveryday/nba_mcp_server/releases/tag/v0.1.0
+[0.1.5]: https://github.com/labeveryday/nba_mcp_server/releases/tag/v0.1.5

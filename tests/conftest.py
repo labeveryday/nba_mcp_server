@@ -1,7 +1,16 @@
 """Pytest configuration and fixtures."""
 
+from unittest.mock import Mock
+
 import pytest
-from unittest.mock import Mock, AsyncMock
+
+
+@pytest.fixture(autouse=True)
+async def _clear_server_cache_between_tests():
+    """Ensure cache does not leak across tests (keeps tests deterministic)."""
+    from nba_mcp_server.server import clear_cache
+    await clear_cache()
+    yield
 
 
 @pytest.fixture
