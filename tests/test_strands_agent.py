@@ -11,6 +11,8 @@ import pytest
 pytest.importorskip("strands")
 pytest.importorskip("strands.tools.mcp")
 
+import json
+
 from mcp import StdioServerParameters, stdio_client
 from strands.tools.mcp import MCPClient
 
@@ -60,6 +62,8 @@ async def test_strands_mcp_client_can_list_tools_and_call_server_info():
         except Exception:
             text = str(result)
 
-        assert "NBA MCP Server Info" in text
-
-
+        # JSON-first: tool output is a JSON envelope containing legacy text in payload["text"].
+        payload = json.loads(text)
+        assert payload["entity_type"] == "tool_result"
+        assert payload["tool_name"] == "get_server_info"
+        assert "NBA MCP Server Info" in payload.get("text", "")

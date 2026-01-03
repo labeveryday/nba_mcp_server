@@ -26,12 +26,7 @@ class TestSafeGet:
 
     def test_safe_get_mixed(self):
         """Test safe_get with mixed dict and list."""
-        data = {
-            "items": [
-                {"name": "first"},
-                {"name": "second"}
-            ]
-        }
+        data = {"items": [{"name": "first"}, {"name": "second"}]}
         assert safe_get(data, "items", 0, "name") == "first"
         assert safe_get(data, "items", 1, "name") == "second"
 

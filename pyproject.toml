@@ -49,7 +49,7 @@ dev = [
 ]
 
 [project.scripts]
-nba-stats-mcp = "nba_mcp_server:main"
+nba-stats-mcp = "nba_mcp_server.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nba_mcp_server"]
@@ -59,9 +59,13 @@ exclude = [
     "/dist",
     "/htmlcov",
     "/.pytest_cache",
+    "/.ruff_cache",
+    "/.coverage",
+    "/.coverage.*",
     "/.uv-cache",
     "/.venv",
     "/coverage.xml",
+    "/DO_NOT_USE",
 ]
 
 [dependency-groups]

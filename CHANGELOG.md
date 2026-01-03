@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Public NBA CDN asset URLs** included in tool responses for UI clients:
+  - Player headshots (1040x760 + 260x190 thumbnails)
+  - Team logos (SVG)
+- **JSON-first tool responses** across the full server toolset (no legacy text-only responses)
+- **Tool completeness checks** in the test suite to ensure no advertised tool returns `Unknown tool`
+
+### Changed
+- `get_league_leaders` now uses `leaguedashplayerstats` (PerGame) for current-season leaders
+
 ## [0.1.5] - 2025-12-14
 
 ### Added
@@ -44,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `get_player_season_stats` now uses `playercareerstats` endpoint (fixes 500 errors)
-- `get_league_leaders` now uses `leaguegamelog` endpoint (fixes 500 errors)
+- `get_league_leaders` now uses `leaguedashplayerstats` endpoint (fixes 500 errors and returns true per-game leaders)
 
 ### Changed
 - Server now exposes 20 tools (was 18)

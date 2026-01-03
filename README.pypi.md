@@ -1,8 +1,11 @@
 # 🏀 NBA MCP Server
 
-Access comprehensive NBA statistics via Model Context Protocol
+Access NBA statistics via the Model Context Protocol (MCP).
 
-Get live scores, player stats, team data, and advanced analytics through a simple MCP server interface.
+This package runs an **MCP stdio server** that exposes **30 NBA tools** (live scores, box scores, standings, player/team stats, play-by-play, shot charts, etc.).
+It is designed for **agents and UIs** that want structured outputs.
+
+**No API key required.**
 
 ## Quick Start
 
@@ -43,6 +46,40 @@ Then configure your MCP client:
   }
 }
 ```
+
+## What you get back (JSON + images)
+
+All tools return **JSON** (encoded in the MCP `TextContent.text` field). Each response includes:
+- `tool_name`, `arguments`
+- `text` (a readable summary)
+- `entities` (extracted IDs + asset URLs for easy UI rendering)
+
+Example (trimmed):
+
+```json
+{
+  "tool_name": "resolve_player_id",
+  "arguments": {"query": "LeBron", "limit": 5},
+  "text": "Player ID matches for 'LeBron': ...",
+  "entities": {
+    "players": [
+      {
+        "player_id": "2544",
+        "headshot_url": "https://cdn.nba.com/headshots/nba/latest/1040x760/2544.png",
+        "thumbnail_url": "https://cdn.nba.com/headshots/nba/latest/260x190/2544.png"
+      }
+    ],
+    "teams": [],
+    "games": []
+  }
+}
+```
+
+### Visual assets (public NBA CDN)
+
+Tool responses include public CDN URLs (no API key required):
+- Player headshots (1040x760 + 260x190 thumbnails)
+- Team logos (SVG)
 
 ## What You Can Ask
 

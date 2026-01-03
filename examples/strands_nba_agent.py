@@ -18,9 +18,10 @@ Run:
 import argparse
 import sys
 
-from mcp import stdio_client, StdioServerParameters
+from mcp import StdioServerParameters, stdio_client
 from strands import Agent
 from strands.tools.mcp import MCPClient
+from strands_tools import current_time
 
 
 def main() -> int:
@@ -57,11 +58,12 @@ def main() -> int:
         tools_resp = mcp_client.list_tools_sync()
         tools = getattr(tools_resp, "tools", tools_resp)
         agent = Agent(
-            tools=tools,
+            tools=tools + [current_time],
             system_prompt=(
                 "You are an NBA analyst agent. Use MCP tools to look up IDs first when needed "
                 "(resolve_player_id, resolve_team_id, find_game_id). "
                 "Prefer calling tools over guessing."
+                "Always use the current_time tool to get the current date and time to accurately answer questions."
             ),
         )
 
@@ -115,5 +117,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-

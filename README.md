@@ -117,6 +117,20 @@ Or if you installed from source:
 - `get_shot_chart` - Shot locations with X/Y coordinates
 - `get_shooting_splits` - Shooting % by zone and distance
 
+## Visual Assets (Public NBA CDN)
+
+This MCP server also returns **public NBA CDN asset URLs** (no API key) alongside IDs in several tool responses, so UI clients can render visuals.
+
+- **Player headshots**:
+  - Full size: `https://cdn.nba.com/headshots/nba/latest/1040x760/{playerId}.png`
+  - Thumbnail: `https://cdn.nba.com/headshots/nba/latest/260x190/{playerId}.png`
+- **Team logos (SVG)**:
+  - `https://cdn.nba.com/logos/nba/{teamId}/global/L/logo.svg`
+
+Tools that include these URLs:
+- **players**: `resolve_player_id`, `search_players`, `get_player_info`
+- **teams**: `resolve_team_id`, `get_all_teams`, `get_standings`
+
 ## Installation Options
 
 ### With uv (recommended)
@@ -164,7 +178,34 @@ nba-stats-mcp
 uv run nba-stats-mcp
 # or
 python -m nba_mcp_server
+
+# or Test with MCP Inspector
+# (Inspector launches a stdio server command; it is NOT the python module name.)
+npx @modelcontextprotocol/inspector
+# In the Inspector UI, configure a stdio server:
+# - Command: uv
+# - Args: --directory /absolute/path/to/nba_mcp_server run nba-stats-mcp
+#   (or Command: python, Args: -m nba_mcp_server)
 ```
+
+## JSON Response Format
+
+All tools return a **single JSON object** (encoded as the MCP `TextContent.text` string). The top-level schema is:
+
+- **`tool_name`**: tool that ran
+- **`arguments`**: arguments passed
+- **`text`**: human-readable summary (kept for debugging and display)
+- **`entities`**: machine-friendly IDs + asset URLs extracted from the result
+
+### Visual Assets (Public NBA CDN)
+
+The server includes public CDN URLs (no API key required) in `entities`:
+
+- **Player headshots**:
+  - `headshot_url`: `https://cdn.nba.com/headshots/nba/latest/1040x760/{playerId}.png`
+  - `thumbnail_url`: `https://cdn.nba.com/headshots/nba/latest/260x190/{playerId}.png`
+- **Team logos**:
+  - `team_logo_url`: `https://cdn.nba.com/logos/nba/{teamId}/global/L/logo.svg`
 
 ## Configuration
 
